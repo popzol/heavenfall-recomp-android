@@ -18,12 +18,14 @@ import java.io.FileNotFoundException;
  * cerrado por un error. (1.0.1: mh4u-log.txt, o mh4u-log.zip con él adentro cuando es grande: Diag.bundle)
  */
 public class LogProvider extends ContentProvider {
-    private static final String AUTHORITY = "com.mh4u.native.logs", NAME = "mh4u-log.txt", ZIP = "mh4u-log.zip";
+    // (the authority is the application id plus ".logs", as the manifest declares it: ${applicationId}.logs)
+    private static final String AUTHORITY_SUFFIX = ".logs", NAME = "mh4u-log.txt", ZIP = "mh4u-log.zip";
 
     static File report(Context c) { return report(c, false); }
     static File report(Context c, boolean zip) { return new File(c.getCacheDir(), zip ? ZIP : NAME); }
-    static Uri uri() { return uri(false); }
-    static Uri uri(boolean zip) { return Uri.parse("content://" + AUTHORITY + "/" + (zip ? ZIP : NAME)); }
+    static Uri uri(Context c, boolean zip) {
+        return Uri.parse("content://" + c.getPackageName() + AUTHORITY_SUFFIX + "/" + (zip ? ZIP : NAME));
+    }
 
     private static boolean zip(Uri uri) { return uri != null && ZIP.equals(uri.getLastPathSegment()); }
 

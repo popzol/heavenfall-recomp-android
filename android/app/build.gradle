@@ -8,16 +8,28 @@ def signing = new Properties()
 def signingFile = rootProject.file('keystore.properties')
 if (signingFile.exists()) signingFile.withInputStream { signing.load(it) }
 
+// The app's own version: heavenfall/VERSION ("major.minor.patch"; upstream's VERSION names the engine and stays as it is).
+// versionCode = major * 10000 + minor * 100 + patch, so it only grows with the version (minor and patch below 100).
+def heavenfallVersion = rootProject.file('../heavenfall/VERSION').text.trim()
+def heavenfallParts = heavenfallVersion.split('\\.').collect { it as int }
+if (heavenfallParts.size() != 3 || heavenfallParts[1] > 99 || heavenfallParts[2] > 99)
+    throw new GradleException("heavenfall/VERSION must be major.minor.patch with minor and patch below 100: " + heavenfallVersion)
+def heavenfallVersionCode = heavenfallParts[0] * 10000 + heavenfallParts[1] * 100 + heavenfallParts[2]
+// the native side has the same version in app_native/app_version.h (the credits show it): the two must agree
+def nativeVersion = (rootProject.file('../app_native/app_version.h').text =~ /#define MH4U_APP_VERSION "([^"]+)"/)[0][1]
+if (nativeVersion != heavenfallVersion)
+    throw new GradleException("app_native/app_version.h says " + nativeVersion + " and heavenfall/VERSION says " + heavenfallVersion)
+
 android {
     namespace = "com.mh4u.port"
     compileSdk 35
     ndkVersion "27.0.12077973"
     defaultConfig {
-        applicationId "com.mh4u.native"
+        applicationId "io.github.popzol.heavenfall"
         minSdk 28
         targetSdk 35
-        versionCode 17
-        versionName "1.0.2"
+        versionCode heavenfallVersionCode
+        versionName heavenfallVersion
         ndk {
             abiFilters 'arm64-v8a'
         }
@@ -36,6 +48,8 @@ android {
             if (signingFile.exists()) signingConfig signingConfigs.local
         }
         debug {
+            // a test build is another app (its label is in src/debug/res), so it never replaces a player's install
+            applicationIdSuffix ".test"
             if (signingFile.exists()) signingConfig signingConfigs.local
         }
     }

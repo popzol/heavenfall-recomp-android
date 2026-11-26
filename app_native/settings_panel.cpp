@@ -735,7 +735,7 @@ void discord_mark(ImDrawList* dl, ImVec2 c, float r, ImU32 col) {
 // Discord buttons once View::OpenSite's or View::OpenDiscord's Open says so (the browser can make Android close the
 // game on a phone with little memory). With nothing to open it (a handheld or a TV box with no browser) the menu says
 // so, as in the MHGU port
-constexpr const char* OFFICIAL_PAGE = "https://github.com/khorne-hub/4u-native";
+constexpr const char* OFFICIAL_PAGE = "https://github.com/popzol/heavenfall-recomp-android";  // (this version's page; the original's is in the credits)
 constexpr const char* DISCORD_INVITE = "https://discord.gg/sk5xEjEMwF";  // (an invite that never expires)
 constexpr const char* NO_BROWSER = "No app here can open web pages.";
 void open_link(const char* what, const char* url) {
@@ -4338,14 +4338,15 @@ void credits_10_rows(std::vector<Row>& r) {
 }
 void rows_about_10(std::vector<Row>& r) {
     header(r, "about.head", MH4U_APP_NAME " " MH4U_APP_VERSION);
-    note(r, "about.by", tr("Made by khorne-hub. Free and open source, under the GPL-3.0 with additional terms."));
-    note(r, "about.site", std::string(tr("Official download:")) + " github.com/khorne-hub/4u-native");
+    note(r, "about.by", tr("A modified version of 4u-native, made by khorne-hub. Free and open source, under the GPL-3.0 with additional terms."));
+    note(r, "about.changed", tr("This version is changed from the original and is not made or endorsed by khorne-hub."));
+    note(r, "about.site", std::string(tr("Original project page:")) + " " MH4U_ORIGIN_PAGE);
     note(r, "about.base", tr("Based on MH4UltimateDC by CompaLarios18, with parts from Azahar and Citra."));
     note(r, "about.mod", tr("The single-screen mod is by jM5557."));
     note(r, "about.gu", std::string(tr("Also by khorne-hub: MHGU for Android,")) + " github.com/khorne-hub/gu-native");
     credits_10_rows(r);
     note(r, "about.legal", tr("This app includes no game code, files, ROMs or keys: you need your own copy of the game. Not affiliated with the Great C or the Great N."));
-    note(r, "about.paid", tr("Only the links khorne-hub gives are official. If you got it anywhere else, paid for it, or it came with ads, it is not the official one."));
+    note(r, "about.paid", tr("This version's downloads are only at github.com/popzol/heavenfall-recomp-android. If you got it anywhere else, paid for it, or it came with ads, it is not this version."));
     action(r, "credits", tr("Show the credits"), []() { credits_show(); }, true, "credits");
     action(r, "licenses", tr("Licenses"), []() { app_call_activity("showLicenses"); }, true, "licenses");  // (1.0.2: as MHGU's)
 #ifndef __ANDROID__
@@ -7022,13 +7023,13 @@ void draw_credits() {
     ImFont* tf = title_font();
     const char* title = MH4U_APP_NAME;
     const std::string lines[] = {
-        std::string(tr("Version")) + " " MH4U_APP_VERSION "  \xC2\xB7  " + tr("by") + " khorne-hub",
-        tr("Free and open source (GPL-3.0)"),
-        std::string(tr("Official download:")) + " github.com/khorne-hub/4u-native",
+        std::string(tr("Version")) + " " MH4U_APP_VERSION "  \xC2\xB7  " + tr("a modified version of 4u-native by khorne-hub"),
+        tr("Free and open source (GPL-3.0 with additional terms)"),
+        std::string(tr("Original project page:")) + " " MH4U_ORIGIN_PAGE,
         tr("Based on MH4UltimateDC by CompaLarios18"),
     };
-    const char* warns[] = {tr("Only the links khorne-hub gives are official."),
-                           tr("Got it elsewhere, paid for it or it has ads? It is not the official one.")};
+    const char* warns[] = {tr("Not made or endorsed by khorne-hub."),
+                           tr("This version's downloads are only at github.com/popzol/heavenfall-recomp-android")};
     // (sized to the screen's height, smaller when it doesn't fit its width)
     float f = std::floor(std::clamp(vp->Size.y * .034f, 12.f, 44.f)), w = 0;
     for (int pass = 0; pass < 2; pass++) {

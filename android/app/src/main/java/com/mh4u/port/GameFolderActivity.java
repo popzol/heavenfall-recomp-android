@@ -258,7 +258,6 @@ public class GameFolderActivity extends Activity {
             final boolean right = startReady();
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
-                Notices.checkInBackground(this);
                 if (right) proceed();
                 else look();
             });

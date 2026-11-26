@@ -473,7 +473,7 @@ public class LogShareActivity extends Activity {
                 shareButton.setText(label);
                 if (isFinishing() || isDestroyed()) return;
                 boolean zip = shared.getName().endsWith(".zip");
-                Uri uri = LogProvider.uri(zip);
+                Uri uri = LogProvider.uri(LogShareActivity.this, zip);
                 Intent send = new Intent(Intent.ACTION_SEND);
                 send.setType(zip ? "application/zip" : "text/plain");
                 send.putExtra(Intent.EXTRA_SUBJECT, "MH4U log");

@@ -1,0 +1,26 @@
+Heavenfall for Android: a modified version of 4u-native
+
+Heavenfall is a modified version of 4u-native (MH4U for Android and PC), made by khorne-hub. Original project page:
+https://github.com/khorne-hub/4u-native
+
+This version is changed from the original: it has its own name, application id, icon, releases and signing key, and it
+is not the official version of 4u-native. It is not made or endorsed by khorne-hub. The original's credits, its licence
+(MH4U-GPL-3.0.txt) and its additional terms (MH4U-ADDITIONAL-TERMS.txt) are kept as they are.
+
+This version's downloads and its complete source code are only at
+https://github.com/popzol/heavenfall-recomp-android
+
+----------------------------------------------------------------------------------------------------------------------
+
+Heavenfall para Android: una versión modificada de 4u-native
+
+Heavenfall es una versión modificada de 4u-native (MH4U para Android y PC), hecho por khorne-hub. Página del proyecto
+original: https://github.com/khorne-hub/4u-native
+
+Esta versión está modificada respecto a la original: tiene su propio nombre, identificador de aplicación, ícono,
+versiones publicadas y clave de firma, y no es la versión oficial de 4u-native. No la hizo ni la respalda khorne-hub.
+Los créditos de la original, su licencia (MH4U-GPL-3.0.txt) y sus términos adicionales (MH4U-ADDITIONAL-TERMS.txt) se
+conservan tal cual.
+
+Las descargas de esta versión y su código fuente completo están solo en
+https://github.com/popzol/heavenfall-recomp-android

@@ -18,7 +18,7 @@ import java.util.Locale;
 
 /**
  * The app's own folder: settings, log, launch.txt, game_folder.txt and the user folder (user/: the saves, the extra
- * data, mods, mh4u.ini). It is the external files folder, Android/data/com.mh4u.native/files, unless the app can't
+ * data, mods, mh4u.ini). It is the external files folder, Android/data/<the application id>/files, unless the app can't
  * write there.
  *
  * On Android 11 and later a file or folder made in Android/data by another app (a file manager working through

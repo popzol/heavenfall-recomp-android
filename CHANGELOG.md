@@ -2,6 +2,18 @@
 
 [Español más abajo](#español)
 
+## Heavenfall for Android
+
+### Unreleased
+
+- A modified version of 4u-native, as an app of its own: "Heavenfall", application id `io.github.popzol.heavenfall`, beside 4u-native.
+- Test builds are "Heavenfall test", application id `io.github.popzol.heavenfall.test`: they never replace your install.
+- The credits and the licenses say it is a modified version of 4u-native by khorne-hub, with a link to the original.
+- 4u-native's check of its own releases and its warning about the signing certificate are taken out.
+- The app's version is in `heavenfall/VERSION`, starting at 0.1.0.
+
+Everything below is the history of 4u-native, the app this one is modified from.
+
 ## 1.0.2
 
 Your code library stays valid: there's no need to build it again.
@@ -729,6 +741,18 @@ MH4U for Android is free. Only the links khorne-hub gives are official: if you g
 came with ads, it isn't the official one. Check the APK's SHA-256 against the release's `.sha256` file.
 
 ## Español
+
+## Heavenfall para Android
+
+### Sin publicar
+
+- Una versión modificada de 4u-native, como app aparte: "Heavenfall", identificador `io.github.popzol.heavenfall`, junto a 4u-native.
+- Las versiones de prueba se llaman "Heavenfall test", con identificador `io.github.popzol.heavenfall.test`: nunca reemplazan tu instalación.
+- Los créditos y las licencias dicen que es una versión modificada de 4u-native de khorne-hub, con un enlace a la original.
+- Se quitan la revisión que 4u-native hacía de sus propias versiones y su aviso sobre el certificado de firma.
+- La versión de la app está en `heavenfall/VERSION`, desde la 0.1.0.
+
+Todo lo que sigue es el historial de 4u-native, la app de la que esta es una versión modificada.
 
 ## 1.0.2
 

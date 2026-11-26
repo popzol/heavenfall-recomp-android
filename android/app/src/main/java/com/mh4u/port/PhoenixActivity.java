@@ -16,7 +16,7 @@ import java.io.File;
  * (":phoenix", AndroidManifest.xml). Espera a que el proceso del juego termine su exit(0) , lo mata si tarda demasiado, lanza la app otra vez y se va.
  */
 public class PhoenixActivity extends Activity {
-    static final String EXTRA_PID = "com.mh4u.native.PID";
+    static final String EXTRA_PID = "com.mh4u.port.PID";
     private static final String TAG = "MH4U";
     // (al menos MIN_WAIT_MS aunque /proc ya no lo muestre; más de MAX_WAIT_MS: se lo mata)
     private static final long MIN_WAIT_MS = 300, MAX_WAIT_MS = 3000, POLL_MS = 50;
