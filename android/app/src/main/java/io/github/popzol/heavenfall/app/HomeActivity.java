@@ -322,15 +322,11 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
             case START_JOB:
                 if (output == null) break;
                 StartChoice choice = StartChoice.forAction(output.action, input);
-                Actions.beforeReplace(this, screen != null && screen.replacesApp, () -> {
-                    if (Actions.start(this, facts, choice)) recompute();
-                });
+                if (Actions.start(this, facts, choice)) recompute();
                 break;
             case RESUME_JOB:
-                Actions.beforeReplace(this, screen != null && screen.replacesApp, () -> {
-                    if (UpdateService.resume(this)) recompute();
-                    else refresh();
-                });
+                if (UpdateService.resume(this)) recompute();
+                else refresh();
                 break;
             case DISCARD_JOB:
                 Actions.askDiscard(this, () -> {

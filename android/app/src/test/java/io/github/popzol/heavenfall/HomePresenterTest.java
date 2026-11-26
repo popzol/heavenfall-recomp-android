@@ -253,18 +253,6 @@ public class HomePresenterTest {
         assertNull("no Play when the library is not good", screen(in, JobProgress.IDLE, true, false).play);
     }
 
-    /** A job that may replace the app says so first (the app closes, the update goes on in the notifications). */
-    @Test
-    public void anUpdateThatReplacesTheAppIsAnnounced() {
-        HomeModel.Input in = good();
-        in.latestApp = "v9.0.0";
-        HomePresenter.Screen s = screen(in, JobProgress.IDLE, true, false);
-        assertEquals(Command.START_JOB, s.main.press());
-        assertTrue(s.replacesApp);
-        in.latestApp = in.appVersion;
-        assertFalse(screen(in, JobProgress.IDLE, true, false).replacesApp);
-    }
-
     /** No failure card when the job did not fail (the model's own state line says what is going on). */
     @Test
     public void noFailureCardWithoutAFailure() {

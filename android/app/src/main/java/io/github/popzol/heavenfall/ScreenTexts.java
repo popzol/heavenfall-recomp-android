@@ -20,10 +20,6 @@ public final class ScreenTexts {
     public static final Text NOTIFY_TITLE = new Text("hf_notify_title");
     public static final Text NOTIFY_TEXT = new Text("hf_notify_text");
     public static final Text ALLOW_NOTIFICATIONS = new Text("hf_btn_allow_notifications");
-    /** Before a job that may replace the app: the new version is installed only after the player leaves the app. */
-    public static final Text REPLACE_TITLE = new Text("hf_replace_title");
-    public static final Text REPLACE_TEXT = new Text("hf_replace_text");
-    public static final Text REPLACE_GO = new Text("hf_btn_update");
     /** Resume's Discard: its question, its button and what a Discard that could not delete everything says. */
     public static final Text DISCARD_TITLE = new Text("hf_discard_title");
     public static final Text DISCARD_TEXT = new Text("hf_discard_text");

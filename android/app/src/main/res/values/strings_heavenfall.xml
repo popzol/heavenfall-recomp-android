@@ -274,9 +274,6 @@
     <string name="hf_discard_text">What it downloaded and made so far is deleted. The installed version stays, and the next update starts from the beginning.</string>
     <string name="hf_toast_discard_failed">Some files of the unfinished update could not be deleted.</string>
     <string name="hf_btn_allow_notifications">Allow notifications</string>
-    <string name="hf_replace_title">Heavenfall updates when you leave it</string>
-    <string name="hf_replace_text">The app\'s new version is installed only after you leave Heavenfall (press the Home button), never while you are in it. Until then everything else is updated here, and the bar tells you when to leave. If anything is left after that, it goes on by itself in the notifications, and a notification tells you when the update ends. Tap it to come back to Heavenfall.</string>
-    <string name="hf_btn_update">Update</string>
     <string name="hf_note_end_channel">Update results</string>
     <string name="hf_note_done_text">Tap to play.</string>
     <string name="hf_note_cancelled_text">Tap to open Heavenfall: the update goes on from where it stopped.</string>

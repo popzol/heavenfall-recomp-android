@@ -68,12 +68,6 @@ public final class HomePresenter {
         public final Button play;
         /** Resume's Discard entry; null when it is not offered. */
         public final Button discard;
-        /**
-         * The big button's job may replace the app (a newer app is out): the screen says first that the new version is
-         * installed only after the player leaves the app, and that what is left goes on by itself, its end told in a
-         * notification.
-         */
-        public final boolean replacesApp;
         public final Button more;
         /** Null unless a job runs. */
         public final Button cancel;
@@ -84,9 +78,8 @@ public final class HomePresenter {
         public final Text hint;
 
         Screen(Text state, List<HomeModel.Block> blocks, List<Text> notes, HomeModel.Block failure, Bar bar, Button main,
-               Button play, Button discard, boolean replacesApp, Button more, Button cancel, Text versions) {
+               Button play, Button discard, Button more, Button cancel, Text versions) {
             this.discard = discard;
-            this.replacesApp = replacesApp;
             this.versions = versions;
             this.hint = bar != null ? ScreenTexts.JOB_HINT : null;
             this.state = state;
@@ -137,9 +130,7 @@ public final class HomePresenter {
         Button play = out.canPlay && out.action != HomeModel.Action.PLAY
                 ? new Button(new Text("hf_btn_play"), true, Command.PLAY) : null;
         Button discard = out.canDiscard ? new Button(new Text("hf_btn_discard"), true, Command.DISCARD_JOB) : null;
-        boolean replaces = startsJob(out.action) && out.action != HomeModel.Action.BUILD && appNewer(in);
-        return new Screen(out.state, blocks, out.notes, failure, null, main, play, discard, replaces, more, null,
-                versions);
+        return new Screen(out.state, blocks, out.notes, failure, null, main, play, discard, more, null, versions);
     }
 
     /** The big button starts (or goes on with) an update job: the last job's failure is shown above it. */
@@ -164,7 +155,7 @@ public final class HomePresenter {
         Button cancel = cancelling ? new Button(new Text("hf_btn_stopping"), false, Command.NONE)
                 : new Button(new Text("hf_btn_cancel"), true, Command.CANCEL_JOB);
         return new Screen(out.state, Collections.<HomeModel.Block>emptyList(), out.notes, null, bar, null, null, null,
-                false, more, cancel, versions);
+                more, cancel, versions);
     }
 
     private static HomeModel.Block failure(JobProgress p) {

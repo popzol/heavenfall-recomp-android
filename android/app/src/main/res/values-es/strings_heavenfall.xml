@@ -274,9 +274,6 @@
     <string name="hf_discard_text">Se borra lo que descargó y preparó hasta ahora. La versión instalada se queda, y la próxima actualización empieza desde el principio.</string>
     <string name="hf_toast_discard_failed">No se pudieron borrar algunos archivos de la actualización sin terminar.</string>
     <string name="hf_btn_allow_notifications">Permitir notificaciones</string>
-    <string name="hf_replace_title">Heavenfall se actualiza cuando salgas</string>
-    <string name="hf_replace_text">La versión nueva de la app se instala solo cuando sales de Heavenfall (pulsa el botón de inicio), nunca mientras estás dentro. Hasta entonces se actualiza aquí todo lo demás, y la barra te dice cuándo salir. Si queda algo después, sigue solo en las notificaciones, y una notificación te avisa cuando la actualización termina. Tócala para volver a Heavenfall.</string>
-    <string name="hf_btn_update">Actualizar</string>
     <string name="hf_note_end_channel">Resultado de las actualizaciones</string>
     <string name="hf_note_done_text">Toca para jugar.</string>
     <string name="hf_note_cancelled_text">Toca para abrir Heavenfall: la actualización sigue desde donde se quedó.</string>

@@ -48,21 +48,6 @@ final class Actions {
         }
     }
 
-    /**
-     * Before a job that may replace the app: says that its new version is installed only after the player leaves the
-     * app and that what is left goes on by itself, its bar and its end in the notifications; {@code go} runs on
-     * "Update". Other jobs run at once.
-     */
-    static void beforeReplace(Activity a, boolean replacesApp, Runnable go) {
-        if (!replacesApp) {
-            go.run();
-            return;
-        }
-        HeavenfallScreens.notice(a, Texts.resolve(a, ScreenTexts.REPLACE_TITLE), Texts.resolve(a, ScreenTexts.REPLACE_TEXT),
-                new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.REPLACE_GO), true, go),
-                new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.NOT_NOW), false, null));
-    }
-
     /** Resume's Discard: asks first (the unfinished update is deleted, the installed game stays); {@code go} on yes. */
     static void askDiscard(Activity a, Runnable go) {
         HeavenfallScreens.notice(a, Texts.resolve(a, ScreenTexts.DISCARD_TITLE), Texts.resolve(a, ScreenTexts.DISCARD_TEXT),
