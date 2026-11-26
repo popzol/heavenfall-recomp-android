@@ -1,1 +1,23 @@
-{"format": 1, "app": {"repository": "popzol/heavenfall-recomp-android", "apk": "Heavenfall-android.apk", "release_file": "Heavenfall-android-release.json"}, "editions": [{"id": "beta", "name": "Heavenfall Beta", "repository": "popzol/4u-heavenfall-mod-beta", "title": "0004000000126300", "update_title": "0004000E00126300", "sets": {"usa": "HeavenfallBeta-android-USA.hfpatch", "usa_xx": "HeavenfallBeta-android-USA-XX.hfpatch"}, "shared_file": "HeavenfallBeta-3ds-shared.hfpack", "release_file": "HeavenfallBeta-android-release.json"}]}
+{
+  "format": 1,
+  "app": {
+    "repository": "popzol/heavenfall-recomp-android",
+    "apk": "Heavenfall-android.apk",
+    "release_file": "Heavenfall-android-release.json"
+  },
+  "editions": [
+    {
+      "id": "heavenfall_beta",
+      "name": "Heavenfall Beta",
+      "repository": "popzol/4u-heavenfall-mod-beta",
+      "title": "0004000000126300",
+      "update_title": "0004000E00126300",
+      "sets": {
+        "usa": "HeavenfallBeta-android-USA.hfpatch",
+        "usa_xx": "HeavenfallBeta-android-USA-XX.hfpatch"
+      },
+      "shared_file": "HeavenfallBeta-3ds-shared.hfpack",
+      "release_file": "HeavenfallBeta-android-release.json"
+    }
+  ]
+}
