@@ -70,6 +70,10 @@ public class BuilderActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        // BEGIN heavenfall: the library is built by the launcher's job, from the launcher's mod: every way here leads to it
+        HeavenfallBridge.toLauncher(this);
+        if (isFinishing()) return;
+        // END heavenfall
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         es = Look.es();
         fromGame = getIntent().getBooleanExtra(EXTRA_FROM_GAME, false);

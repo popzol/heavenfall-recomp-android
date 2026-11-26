@@ -128,29 +128,41 @@ public class HomeModelTest {
         }
     }
 
-    /** The update dump is a setup need until a mod is installed; after that a missing one only blocks an update. */
+    /**
+     * The update dump is a setup need, installed or not: the library's build and the game's start both read it. Without
+     * it, or with a wrong one, no state offers Install, Update, Build, Resume or Play (the screen would only show a toast).
+     */
     @Test
     public void updateDumpProblems() {
         String[][] cases = {{"MISSING", "update_missing"}, {"ENCRYPTED", "update_encrypted"},
                 {"WRONG_REGION", "update_region"}, {"WRONG_VERSION", "update_version"}};
         for (String[] c : cases) {
-            HomeModel.Input in = good();
-            in.installed = null;
-            in.update = Source.valueOf(c[0]);
-            HomeModel.Output out = run(in);
-            assertEquals(c[0], Action.SET_UP, out.action);
-            assertState("hf_problem_" + c[1], out);
-
-            HomeModel.Input later = good();
-            later.update = Source.valueOf(c[0]);
-            assertEquals("installed: Play does not need it", Action.PLAY, run(later).action);
-
-            later.latestMod = "v0.3";
-            HomeModel.Output blockedUpdate = run(later);
-            assertEquals(Action.UPDATE, blockedUpdate.action);
-            assertFalse(blockedUpdate.enabled);
-            assertEquals("hf_problem_" + c[1], blockedUpdate.blocks.get(0).reason.key);
-            assertEquals("hf_advice_" + c[1], blockedUpdate.blocks.get(0).advice.key);
+            for (boolean installed : new boolean[] {false, true}) {
+                HomeModel.Input in = good();
+                if (!installed) in.installed = null;
+                in.update = Source.valueOf(c[0]);
+                HomeModel.Output out = run(in);
+                assertEquals(c[0] + " installed=" + installed, Action.SET_UP, out.action);
+                assertState("hf_problem_" + c[1], out);
+                assertEquals("hf_advice_" + c[1], out.problems.get(0).advice.key);
+                assertFalse(out.canPlay);
+            }
+            // each state that used to go on without it: a newer mod, a library to build, a job left half-done, offline
+            for (int state = 0; state < 4; state++) {
+                HomeModel.Input in = good();
+                in.update = Source.valueOf(c[0]);
+                if (state == 0) in.latestMod = "v0.3";
+                if (state == 1) in.library = Library.NONE;
+                if (state == 2) in.job = Job.HALF_DONE;
+                if (state == 3) {
+                    in.latestMod = null;
+                    in.latestApp = null;
+                }
+                HomeModel.Output out = run(in);
+                assertEquals(c[0] + " state " + state, Action.SET_UP, out.action);
+                assertFalse(out.more.contains(More.REBUILD));
+                assertFalse(out.more.contains(More.REINSTALL));
+            }
         }
     }
 
@@ -361,7 +373,7 @@ public class HomeModelTest {
         assertTrue(blocked(out, "hf_block_battery"));
     }
 
-    /** Offline never takes Play away, whatever the room, battery, memory and update dump are. */
+    /** Offline never takes Play away, whatever the room, battery and memory are. */
     @Test
     public void offlineNeverBlocksPlay() {
         HomeModel.Input in = good();
@@ -370,7 +382,6 @@ public class HomeModelTest {
         in.freeBytes = 10L << 20;
         in.batteryPercent = 2;
         in.availableMemoryMb = 50;
-        in.update = Source.MISSING;
         HomeModel.Output out = run(in);
         assertEquals(Action.PLAY, out.action);
         assertState("hf_state_offline", out);
@@ -422,8 +433,8 @@ public class HomeModelTest {
         assertFalse("reinstall downloads", run(in).more.contains(More.REINSTALL));
         in = good();
         in.update = Source.MISSING;
-        assertFalse(run(in).more.contains(More.REINSTALL));
-        assertTrue(run(in).more.contains(More.REBUILD));
+        assertFalse("rebuild and reinstall read the dumps", run(in).more.contains(More.REINSTALL));
+        assertFalse(run(in).more.contains(More.REBUILD));
         in = good();
         in.installed = null;
         in.library = Library.NONE;
@@ -441,7 +452,7 @@ public class HomeModelTest {
         assertEquals(5, out.checks.size());
         for (HomeModel.Check c : out.checks.subList(0, 4)) {
             assertEquals(HomeModel.CheckStatus.OK, c.status);
-            assertTrue(c.required || c.label.key.equals("hf_check_update"));
+            assertTrue(c.label.key, c.required);
         }
         HomeModel.Check xx = out.checks.get(4);
         assertEquals("hf_check_xx", xx.label.key);

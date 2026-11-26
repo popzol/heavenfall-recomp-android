@@ -3041,12 +3041,12 @@ void mods_rows(std::vector<Row>& r) {
         if (!check.busy) {
             const std::string name = s.try_code_mod;
             s.try_code_mod.clear();
-            if (check.known && check.matches) {
+            if (check.known && check.matches && mod_info(name) && content_mod_switch(*mod_info(name), true) == ModSwitch::OK) {
                 c.mods = rows;
                 s.mods_note = fmt("Added: %s. The code library was made with it, so it is on: save, then restart the game.", name.c_str());
                 s.mods_note_bad = false;
             } else {
-                s.mods_note = fmt("Added: %s, off. It changes the game's code and the code library was not made with it: make the library again with this mod (System › Game code › Build the game code) before turning it on, or the game won't start.", name.c_str());
+                s.mods_note = fmt(say("Added: %s, off. It changes the game's code, and the code library is made with Heavenfall's mod alone: it stays off.", "Agregado: %s, desactivado. Cambia el código del juego, y la biblioteca de código se hace solo con el mod de Heavenfall: se queda desactivado."), name.c_str());
                 s.mods_note_bad = true;
             }
         }
@@ -3090,6 +3090,18 @@ void mods_rows(std::vector<Row>& r) {
         row.cold = true;
         if (info) row.help = mod_help(*info);
         auto set_on = [name](bool v) {
+            if (const mh4n::mods::Mod* mod = mod_info(name)) {  // (the launcher's mod stays on, and a mod with code stays off)
+                const ModSwitch can = content_mod_switch(*mod, v);
+                if (can != ModSwitch::OK) {
+                    s.mods_note = can == ModSwitch::LAUNCHER_STAYS_ON
+                                      ? say("Heavenfall's own mod stays on: the game's code library is made with it.",
+                                            "El mod propio de Heavenfall se queda activado: la biblioteca de código del juego se hace con él.")
+                                      : say("This mod changes the game's code, and the code library is made with Heavenfall's mod alone: it stays off.",
+                                            "Este mod cambia el código del juego, y la biblioteca de código se hace solo con el mod de Heavenfall: se queda desactivado.");
+                    s.mods_note_bad = true;
+                    return;
+                }
+            }
             for (auto& m : s.draft.mods)
                 if (m.name == name) m.on = v;
         };
@@ -3107,7 +3119,7 @@ void mods_rows(std::vector<Row>& r) {
                     }
             };
             std::vector<std::string> names = {tr(on ? "Turn off" : "Turn on"), tr("Move up"), tr("Move down")};
-            if (!from_game) names.push_back(tr("Remove"));
+            if (!from_game && !content_mod_is_launcher(name)) names.push_back(tr("Remove"));
             choices(copy, names, -1, [set_on, move, on, name](int v) {
                 if (v == 0) set_on(!on);
                 else if (v == 1) move(-1);

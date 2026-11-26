@@ -121,12 +121,13 @@ public class AssistantPresenterTest {
         assertEquals(CheckStatus.PROBLEM, s.steps.get(4).status);
     }
 
-    /** Once the mod is installed the update's dump is no longer a required step. */
+    /** The update's dump stays a required step once the mod is installed: the build and the game's start read it. */
     @Test
-    public void updateNotRequiredOnceInstalled() {
+    public void updateStaysRequiredOnceInstalled() {
         AssistantPresenter.Screen s = screen(Storage.READY, Source.GOOD, Source.MISSING, Source.GOOD, true);
-        assertTrue(s.done);
-        assertFalse(s.steps.get(3).required);
+        assertFalse(s.done);
+        assertTrue(s.steps.get(3).required);
+        assertEquals(Kind.UPDATE, s.current.kind);
     }
 
     /** While it is not done the screen leaves for later and offers Check again. */

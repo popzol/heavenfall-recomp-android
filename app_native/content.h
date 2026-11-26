@@ -65,6 +65,15 @@ ContentImport content_cheats_import_result();
 
 // ---- mods -----------------------------------------------------------------------------------------------------
 std::vector<mh4n::mods::Mod> content_mods();
+// The launcher's own mod (LauncherMod.NAME in the Java launcher): the game's code library is made with it, so the Mods
+// page keeps it on and never removes it, and keeps every other mod that carries code off (the launcher builds the
+// library from this mod alone). A mod that only changes files stays the player's choice.
+constexpr const char* kLauncherMod = "Heavenfall";
+bool content_mod_is_launcher(const std::string& name);
+enum class ModSwitch { OK, LAUNCHER_STAYS_ON, CODE_STAYS_OFF };
+// Whether `mod` can be set `on` (what the page says when it cannot)
+ModSwitch content_mod_switch(const mh4n::mods::Mod& mod, bool on);
+// (content_mods_save puts every switch to what content_mod_switch allows before it writes the order)
 bool content_mods_save(const std::vector<mh4n::mods::Mod>& list, std::string* error);
 // The mods the app found in the game folder's mods only by 1.0's search (further down, the game's own folders) and added
 // off (load/mods/.found_off, GameFolderActivity.syncMods): the Mods page says so until its list is saved

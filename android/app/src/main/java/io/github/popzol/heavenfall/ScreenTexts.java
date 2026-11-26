@@ -16,6 +16,9 @@ public final class ScreenTexts {
     public static final Text ALLOW_TEXT = new Text("hf_allow_installs_text");
     public static final Text ALLOW = new Text("hf_btn_allow");
     public static final Text NOT_NOW = new Text("hf_btn_not_now");
+    /** The question before the app asks Android to show notifications (Android 13 and later). */
+    public static final Text NOTIFY_TITLE = new Text("hf_notify_title");
+    public static final Text NOTIFY_TEXT = new Text("hf_notify_text");
     /** The folder chooser: its title, the line for a folder that holds a game file, the line for the others. */
     public static final Text FOLDER_TITLE = new Text("hf_folder_title");
     public static final Text FOLDER_HERE = new Text("hf_folder_here");

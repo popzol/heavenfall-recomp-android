@@ -462,8 +462,11 @@ public class GameActivity extends SDLActivity {
     /** Settings -> Build the game code: the on-phone builder, over the game (which starts again to load what it made). */
     public static void showBuilder() {
         SDLActivity activity = mSingleton;
+        // BEGIN heavenfall: the library is built by the launcher's job, from its mod, never over the running game: a note
         if (activity != null)
-            activity.startActivity(new Intent(activity, BuilderActivity.class).putExtra(BuilderActivity.EXTRA_FROM_GAME, true));
+            activity.runOnUiThread(() -> android.widget.Toast.makeText(activity, HeavenfallBridge.buildInLauncher(),
+                    android.widget.Toast.LENGTH_LONG).show());
+        // END heavenfall
     }
 
     /** Ajustes -> Carpeta del juego. */

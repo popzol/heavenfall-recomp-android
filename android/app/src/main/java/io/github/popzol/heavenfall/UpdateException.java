@@ -24,6 +24,15 @@ public final class UpdateException extends Exception {
         this.advice = failure.advice();
     }
 
+    /** A failure with its own words (the mod's maker names what is wrong with a file, which the failure's texts cannot). */
+    public UpdateException(UpdateFailure failure, Text reason, Text advice, String detail, Throwable cause) {
+        super(failure + (detail == null || detail.isEmpty() ? "" : ": " + detail), cause);
+        this.failure = failure;
+        this.detail = detail == null ? "" : detail;
+        this.reason = reason;
+        this.advice = advice;
+    }
+
     public UpdateException(ReleaseRules.Refusal refusal, String detail) {
         super(refusal + (detail == null || detail.isEmpty() ? "" : ": " + detail));
         this.failure = null;

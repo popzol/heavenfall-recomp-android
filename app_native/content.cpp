@@ -307,8 +307,20 @@ std::vector<std::string> content_mods_found_off() {
     return out;
 }
 
-bool content_mods_save(const std::vector<mh4n::mods::Mod>& list, std::string* error) {
+bool content_mod_is_launcher(const std::string& name) { return strcasecmp(name.c_str(), kLauncherMod) == 0; }
+
+ModSwitch content_mod_switch(const mh4n::mods::Mod& mod, bool on) {
+    if (content_mod_is_launcher(mod.name)) return on ? ModSwitch::OK : ModSwitch::LAUNCHER_STAYS_ON;
+    return on && mod.code ? ModSwitch::CODE_STAYS_OFF : ModSwitch::OK;
+}
+
+bool content_mods_save(const std::vector<mh4n::mods::Mod>& asked, std::string* error) {
     if (g_user.empty()) return false;
+    std::vector<mh4n::mods::Mod> list = asked;
+    for (auto& m : list) {  // (a page that let one through, or a file edited by hand: the order written is a right one)
+        if (content_mod_is_launcher(m.name)) m.on = true;
+        else if (m.code) m.on = false;
+    }
     if (!mh4n::mods::SaveOrder(ModsDir(), list, error)) return false;
     unlink((ModsDir() + ".found_off").c_str());  // (the player chose: the note of the mods found off is done)
     std::string names;
@@ -319,6 +331,7 @@ bool content_mods_save(const std::vector<mh4n::mods::Mod>& list, std::string* er
 
 bool content_mod_remove(const std::string& name) {
     if (g_user.empty() || name.empty() || name.find('/') != std::string::npos || name[0] == '.') return false;
+    if (content_mod_is_launcher(name)) return false;  // (the launcher's own mod: the game would have no code library)
     for (const auto& m : content_mods()) {
         if (m.name != name) continue;
         if (m.from_game_folder) return false;

@@ -70,7 +70,7 @@ final class FakeServer implements AutoCloseable {
             return body;
         }
 
-        /** Closes the connection (also cuts a body that was announced longer than what was written). */
+        /** Closes the connection at once (also cuts a body that was announced longer than what was written). */
         void close() {
             if (closed) return;
             closed = true;
@@ -79,6 +79,28 @@ final class FakeServer implements AutoCloseable {
             } catch (IOException ignored) {
                 // gone already
             }
+        }
+
+        /**
+         * Ends an answer the way a real server does: the end of the answer is sent, then the client's side is read
+         * until it closes (or a moment passes). Closing a socket with the client's bytes still unread resets the
+         * connection, and a reset throws away the answer still on its way to the client: the client then sees a failed
+         * request that no one made fail.
+         */
+        void finish() {
+            if (closed) return;
+            try {
+                socket.shutdownOutput();
+                socket.setSoTimeout(LINGER_MS);
+                InputStream in = socket.getInputStream();
+                byte[] sink = new byte[512];
+                while (in.read(sink) >= 0) {
+                    // the client has nothing more to say: it only closes
+                }
+            } catch (IOException ignored) {
+                // closed by the client, or nothing came in the moment: the answer was sent in full
+            }
+            close();
         }
     }
 
@@ -110,6 +132,7 @@ final class FakeServer implements AutoCloseable {
     private final Map<String, Handler> routes = new ConcurrentHashMap<>();
     final List<String> requests = Collections.synchronizedList(new ArrayList<String>());
     final List<String> ranges = Collections.synchronizedList(new ArrayList<String>());
+    private static final int LINGER_MS = 1000;
     private volatile boolean stopped;
 
     FakeServer() throws IOException {
@@ -158,7 +181,7 @@ final class FakeServer implements AutoCloseable {
         } catch (IOException | RuntimeException e) {
             // a client that went away
         } finally {
-            if (ex != null) ex.close();
+            if (ex != null) ex.finish();
             else {
                 try {
                     client.close();

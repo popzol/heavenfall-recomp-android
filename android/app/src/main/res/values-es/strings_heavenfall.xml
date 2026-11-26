@@ -138,7 +138,6 @@
     <string name="hf_fail_self_storage">No hay espacio suficiente para instalar la app nueva</string>
     <string name="hf_fail_self_no_answer">No se confirmó a tiempo la instalación de la app nueva</string>
     <string name="hf_fail_self_failed">No se pudo instalar la app nueva</string>
-    <string name="hf_fail_apply_unavailable">Esta versión de la app todavía no puede crear el mod</string>
     <string name="hf_fail_apply_failed">No se pudo crear el mod</string>
     <string name="hf_fail_build_space">No hay espacio libre suficiente para construir el código del juego</string>
     <string name="hf_fail_build_memory">El móvil se quedó sin memoria al construir el código del juego</string>
@@ -205,6 +204,8 @@
     <string name="hf_home_versions">App %1$s  ·  Mod %2$s</string>
     <string name="hf_allow_installs_title">Permitir instalar la versión nueva</string>
     <string name="hf_allow_installs_text">Para actualizarse, Heavenfall tiene que poder instalar apps. Android abre sus ajustes: activa el interruptor de Heavenfall, vuelve y toca el botón otra vez.</string>
+    <string name="hf_notify_title">Mostrar el progreso</string>
+    <string name="hf_notify_text">La actualización tarda un rato. Si permites las notificaciones, su barra se queda en el panel al salir de la app y te avisa al terminar. Funciona igual si no las permites.</string>
     <string name="hf_btn_allow">Abrir los ajustes</string>
     <string name="hf_btn_not_now">Ahora no</string>
 

@@ -50,6 +50,9 @@ public class PhoenixActivity extends Activity {
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (launch != null) {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            // BEGIN heavenfall: the app opens on the launcher's Home now; it starts the game itself when it would say Play
+            launch.putExtra(HeavenfallBridge.EXTRA_AUTO_PLAY, true);
+            // END heavenfall
             startActivity(launch);
             Log.i(TAG, "phoenix: app lanzada de nuevo");
         } else {

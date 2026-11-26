@@ -53,7 +53,7 @@ public final class UpdateService extends Service {
     private static volatile JobProgress progress = JobProgress.IDLE;
     private static volatile Control control;
     private static volatile Thread worker;
-    private static volatile ModApplier applier = new UnavailableApplier();
+    private static volatile ModApplier applier;
 
     private PowerManager.WakeLock wake;
     private volatile boolean timedOut;
@@ -81,9 +81,9 @@ public final class UpdateService extends Service {
         OBSERVERS.remove(o);
     }
 
-    /** The real mod applier (task A3) comes in here; until then a stand-in fails with a named text. */
+    /** The mod's applier ({@link Wiring} sets it once per process, before any job can start). */
     public static void setApplier(ModApplier a) {
-        applier = a == null ? new UnavailableApplier() : a;
+        applier = a;
     }
 
     /**
@@ -239,6 +239,8 @@ public final class UpdateService extends Service {
         Context app = getApplicationContext();
         JobProgress end;
         try {
+            Wiring.install(app);
+            Locations.recoverMod(app);   // a swap cut short is put right before this job touches the mod
             UrlMap map = Networks.urlMap(app);
             UpdateRunner.Parts parts = new UpdateRunner.Parts(new ReleaseClient(map), new Downloader(map),
                     new SelfUpdate(app), applier, new PhoneLibraryBuilder(app, request.paths.libraryDir),

@@ -22,7 +22,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import io.github.popzol.heavenfall.app.UnavailableApplier;
 
 /** The whole job against a local server and stand-ins for the phone's parts (the installer, the applier, the builder). */
 public class UpdateRunnerTest {
@@ -151,6 +150,11 @@ public class UpdateRunnerTest {
         return new UpdateRunner(parts, seen::add);
     }
 
+    /** What a job ended as, and every request the server saw: a failure then says what the server was asked and what it answered. */
+    private String why(JobProgress end) {
+        return end + " requests=" + server.requests;
+    }
+
     private ModApplier applierOverride;
     private byte[] installedApkBytes;
 
@@ -194,7 +198,7 @@ public class UpdateRunnerTest {
     public void aFreshInstallDoesEveryStep() throws Exception {
         publishMod("v0.3", false);
         JobProgress end = run(request("1.0.0", false));
-        assertEquals(end.toString(), JobProgress.Phase.DONE, end.phase);
+        assertEquals(why(end), JobProgress.Phase.DONE, end.phase);
         assertEquals(1000, end.permille);
         assertMonotonic(seen);
         assertEquals(java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared", "build"), calls);
@@ -221,7 +225,7 @@ public class UpdateRunnerTest {
     public void theSetWithMhXxIsUsedWhenAsked() throws Exception {
         publishMod("v0.3", true);
         JobProgress end = run(request("1.0.0", true));
-        assertEquals(end.toString(), JobProgress.Phase.DONE, end.phase);
+        assertEquals(why(end), JobProgress.Phase.DONE, end.phase);
         assertEquals("apply " + beta.setName("usa", true) + " +shared", calls.get(0));
         Installed i = Installed.parse(new String(Files.readAllBytes(paths.installedFile.toPath()), StandardCharsets.UTF_8));
         assertTrue(i.withXx);
@@ -253,21 +257,9 @@ public class UpdateRunnerTest {
         applyFails = null;
         seen.clear();
         JobProgress again = run(request("1.0.0", false));
-        assertEquals(again.toString(), JobProgress.Phase.DONE, again.phase);
+        assertEquals(why(again), JobProgress.Phase.DONE, again.phase);
         assertEquals("the verified download is not fetched again", 1, server.count(setPath));
         assertTrue(paths.installedFile.isFile());
-    }
-
-    /** The stand-in applier fails with a named text (the real one comes with the JNI). */
-    @Test
-    public void theStandInApplierNamesItsFailure() throws Exception {
-        publishMod("v0.3", false);
-        applierOverride = new UnavailableApplier();
-        JobProgress end = run(request("1.0.0", false));
-        assertEquals(JobProgress.Phase.FAILED, end.phase);
-        assertEquals("hf_fail_apply_unavailable", end.failureReason.key);
-        assertEquals("hf_advice_update_app", end.failureAdvice.key);
-        assertFalse(paths.installedFile.exists());
     }
 
     /** Everything current and the library good: nothing is downloaded and the job is done at once. */
@@ -288,7 +280,7 @@ public class UpdateRunnerTest {
         publishMod("v0.3", false);
         writeInstalled("v0.2", false, true);
         JobProgress end = run(request("1.0.0", false));
-        assertEquals(end.toString(), JobProgress.Phase.DONE, end.phase);
+        assertEquals(why(end), JobProgress.Phase.DONE, end.phase);
         assertEquals(java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared"), calls);
         Installed i = Installed.parse(new String(Files.readAllBytes(paths.installedFile.toPath()), StandardCharsets.UTF_8));
         assertEquals("v0.3", i.modVersion);
@@ -302,7 +294,7 @@ public class UpdateRunnerTest {
         writeInstalled("v0.2", false, true);
         appliedCode = Support.sha('d');
         JobProgress end = run(request("1.0.0", false));
-        assertEquals(end.toString(), JobProgress.Phase.DONE, end.phase);
+        assertEquals(why(end), JobProgress.Phase.DONE, end.phase);
         assertEquals(java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared", "build"), calls);
         Installed i = Installed.parse(new String(Files.readAllBytes(paths.installedFile.toPath()), StandardCharsets.UTF_8));
         assertEquals(Support.sha('d'), i.libraryCodeSha256);
@@ -338,7 +330,7 @@ public class UpdateRunnerTest {
         publishMod("v0.3", false);
         writeInstalled("v0.2", false, true);
         JobProgress end = run(request("1.0.0", false));
-        assertEquals(end.toString(), JobProgress.Phase.RESTARTING, end.phase);
+        assertEquals(why(end), JobProgress.Phase.RESTARTING, end.phase);
         assertEquals(java.util.Arrays.asList("install " + editions.app().apk), calls);
         assertArrayEquals(files.get(editions.app().repository + "/v1.1.0/" + editions.app().apk), installedApkBytes);
         Resume note = Resume.tryParse(new String(Files.readAllBytes(paths.resumeFile.toPath()), StandardCharsets.UTF_8));
@@ -400,14 +392,14 @@ public class UpdateRunnerTest {
             }
         });
         JobProgress end = runner().run(request("1.0.0", false), control);
-        assertEquals(end.toString(), JobProgress.Phase.CANCELLED, end.phase);
+        assertEquals(why(end), JobProgress.Phase.CANCELLED, end.phase);
         File part = Downloader.partOf(paths.downloads, setName);
         assertTrue(part.isFile());
         assertEquals(HomeModel.Job.HALF_DONE, JobState.left(paths.jobFile, "1.0.0"));
         long have = part.length();
         server.file("/github/" + beta.repository + "/releases/download/v0.3/" + setName, set);
         JobProgress again = run(request("1.0.0", false));
-        assertEquals(again.toString(), JobProgress.Phase.DONE, again.phase);
+        assertEquals(why(again), JobProgress.Phase.DONE, again.phase);
         assertTrue("the rest was asked for by range: " + have + " in " + server.ranges, server.ranges.contains("bytes=" + have + "-"));
     }
 
