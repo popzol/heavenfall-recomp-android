@@ -206,7 +206,7 @@
     <string name="hf_time_left_under_minute">Queda menos de un minuto</string>
     <string name="hf_time_left_minutes">Quedan unos %1$s min</string>
     <string name="hf_time_left_hours">Quedan unas %1$s h %2$s min</string>
-    <string name="hf_job_hint">Deja el móvil enchufado. La actualización sigue si sales de la app.</string>
+    <string name="hf_job_hint">Puedes salir de la app y usar el móvil: sigue en segundo plano. Déjalo enchufado.</string>
     <string name="hf_home_versions">App %1$s  ·  Mod %2$s</string>
     <string name="hf_allow_installs_title">Permitir instalar la versión nueva</string>
     <string name="hf_allow_installs_text">Para actualizarse, Heavenfall tiene que poder instalar apps. Android abre sus ajustes: activa el interruptor de Heavenfall, vuelve y toca el botón otra vez.</string>
@@ -226,7 +226,7 @@
     <string name="hf_btn_finish">Terminar</string>
     <string name="hf_btn_later">Más tarde</string>
     <string name="hf_help_permission">Heavenfall lee tu juego del almacenamiento del móvil, así que Android tiene que dejarle ver todos los archivos. No cambia nada ahí.</string>
-    <string name="hf_help_folder">Elige la carpeta donde están (o estarán) los archivos de tu juego. Heavenfall los lee desde ahí y guarda en la misma carpeta el código del juego.</string>
+    <string name="hf_help_folder">Elige la carpeta donde están (o estarán) los archivos de tu juego. Heavenfall los lee desde ahí; el código del juego que construye se queda dentro de la app.</string>
     <string name="hf_help_game">Heavenfall se crea a partir de tu propia copia del Monster Hunter 4 Ultimate americano, en un archivo .3ds, .cci o .cxi.</string>
     <string name="hf_help_update">También necesita la actualización 1.3.0 del juego, en un archivo .cia, del mismo juego americano.</string>
     <string name="hf_help_xx">Opcional: con tu propia copia de Monster Hunter XX en la misma carpeta, Heavenfall añade aspectos de equipo y materiales raros de ese juego. Puedes saltarte esto.</string>

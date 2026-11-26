@@ -206,7 +206,7 @@
     <string name="hf_time_left_under_minute">Less than a minute left</string>
     <string name="hf_time_left_minutes">About %1$s min left</string>
     <string name="hf_time_left_hours">About %1$s h %2$s min left</string>
-    <string name="hf_job_hint">Keep the phone plugged in. The update goes on if you leave the app.</string>
+    <string name="hf_job_hint">You can leave the app and use the phone: it goes on in the background. Keep it plugged in.</string>
     <string name="hf_home_versions">App %1$s  ·  Mod %2$s</string>
     <string name="hf_allow_installs_title">Allow the new version to be installed</string>
     <string name="hf_allow_installs_text">To update itself, Heavenfall must be allowed to install apps. Android opens its settings: turn on the switch for Heavenfall, come back and tap the button again.</string>
@@ -226,7 +226,7 @@
     <string name="hf_btn_finish">Finish</string>
     <string name="hf_btn_later">Later</string>
     <string name="hf_help_permission">Heavenfall reads your game from the phone\'s storage, so Android must let it see all files. It changes nothing there.</string>
-    <string name="hf_help_folder">Choose the folder where your game files are, or will be. Heavenfall reads them from there and saves the game\'s code in the same folder.</string>
+    <string name="hf_help_folder">Choose the folder where your game files are, or will be. Heavenfall reads them from there; the game\'s code it builds stays inside the app.</string>
     <string name="hf_help_game">Heavenfall is made from your own copy of the American Monster Hunter 4 Ultimate, as a .3ds, .cci or .cxi file.</string>
     <string name="hf_help_update">It also needs the game\'s 1.3.0 update, as a .cia file, from the same American game.</string>
     <string name="hf_help_xx">Optional: with your own copy of Monster Hunter XX in the same folder, Heavenfall adds gear looks and rare materials from it. You can skip this.</string>
