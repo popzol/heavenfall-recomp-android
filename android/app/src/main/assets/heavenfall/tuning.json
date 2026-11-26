@@ -14,10 +14,10 @@
     "download_kib_s": 3000,
     "apply_kib_s": 25000,
     "app_install_s": 15,
-    "build_s": 3100,
-    "build_before_compile_s": 210,
-    "build_unit_ms": 1650,
-    "build_after_compile_s": 40,
-    "build_units": 1742
+    "build_s": 2000,
+    "build_before_compile_s": 230,
+    "build_unit_ms": 1000,
+    "build_after_compile_s": 20,
+    "build_units": 1741
   }
 }
