@@ -55,3 +55,10 @@ android {
         checkReleaseBuilds = false
     }
 }
+
+// BEGIN heavenfall JVM tests (io.github.popzol.heavenfall): plain JVM, org.json as the app's own on a phone
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}
+// END heavenfall JVM tests
