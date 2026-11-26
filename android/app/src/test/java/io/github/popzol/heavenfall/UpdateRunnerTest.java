@@ -163,7 +163,7 @@ public class UpdateRunnerTest {
     }
 
     private UpdateRequest request(String appVersion, boolean xx) {
-        return new UpdateRequest("beta", paths, appVersion, xx, false, false, 0);
+        return new UpdateRequest("heavenfall_beta", paths, appVersion, xx, false, false, 0);
     }
 
     private JobProgress run(UpdateRequest r) {
@@ -171,7 +171,7 @@ public class UpdateRunnerTest {
     }
 
     private void writeInstalled(String modTag, boolean xx, boolean libraryGood) throws IOException {
-        Installed i = new Installed("beta", modTag, beta.setName("usa", xx), Support.sha('a'), xx, CODE,
+        Installed i = new Installed("heavenfall_beta", modTag, beta.setName("usa", xx), Support.sha('a'), xx, CODE,
                 libraryGood ? LIB_ID : "", libraryGood ? CODE : "");
         Files.write(paths.installedFile.toPath(), i.toJson().getBytes(StandardCharsets.UTF_8));
         libraryPresent = libraryGood;
@@ -373,7 +373,7 @@ public class UpdateRunnerTest {
         assertFalse("a refused install leaves no note", paths.resumeFile.exists());
         assertTrue("nothing after the APK ran", calls.size() == 1);
         // a note left by an install that did not happen (the process died) is dropped by the home's check
-        Files.write(paths.resumeFile.toPath(), new Resume("beta", "v1.1.0", "v0.3", false, 100).toJson().getBytes(StandardCharsets.UTF_8));
+        Files.write(paths.resumeFile.toPath(), new Resume("heavenfall_beta", "v1.1.0", "v0.3", false, 100).toJson().getBytes(StandardCharsets.UTF_8));
         assertEquals(HomeModel.Job.NONE, JobState.left(paths.jobFile, "1.0.0"));
         assertFalse(paths.resumeFile.exists());
     }
@@ -426,7 +426,7 @@ public class UpdateRunnerTest {
     /** The request is saved whole and read back (the app goes on with it after replacing itself). */
     @Test
     public void theRequestRoundTrips() {
-        UpdateRequest r = new UpdateRequest("beta", new JobPaths(new File("d"), new File("s"), new File("m"),
+        UpdateRequest r = new UpdateRequest("heavenfall_beta", new JobPaths(new File("d"), new File("s"), new File("m"),
                 new File("i"), new File("r"), new File("j"), new File("g"), new File("u"), new File("x"), new File("l")),
                 "1.2.3", true, false, true, 250);
         UpdateRequest back = UpdateRequest.tryParse(r.toJson());
