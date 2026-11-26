@@ -153,11 +153,18 @@ public final class UpdateService extends Service {
                 com.mh4u.port.HeavenfallBridge.buildCutShort(context));
     }
 
-    /** Home's Discard, after its question: what the half-done job left is deleted (never while a job runs). */
+    /**
+     * Home's Discard, after its question: what the half-done job left is deleted (never while a job runs): its
+     * request, note, downloads and staging folder, and the work folder of a build it left cut short (the builder's
+     * objects' cache and tools stay). Off the main thread: a staging folder or a work folder holds thousands of files.
+     */
     public static boolean discard(Context context) {
         synchronized (UpdateService.class) {
             if (running()) return false;
             boolean ok = JobState.discard(Locations.places(context));
+            if (com.mh4u.port.HeavenfallBridge.buildCutShort(context)) {
+                ok &= com.mh4u.port.HeavenfallBridge.discardBuild(context, Locations.libraryDir(context));
+            }
             Notes.cancelResume(context);
             publish(JobProgress.IDLE);
             return ok;

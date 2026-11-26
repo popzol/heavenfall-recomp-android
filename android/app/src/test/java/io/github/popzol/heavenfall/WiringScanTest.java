@@ -151,4 +151,20 @@ public class WiringScanTest {
                 phoneBuild.contains("os.path.join(os.path.dirname(os.path.abspath(args.work)), CACHE)"));
         assertTrue(phoneBuild.contains("CACHE = \"object-cache\""));
     }
+
+    @Test
+    public void discardCleansABuildCutShortOffTheMainThread() throws Exception {
+        // Catches (F3) a Discard that leaves a cut build's work folder behind (hundreds of MB, and Resume would come
+        // back), that deletes the objects' cache or the tools, or that deletes thousands of files on the main thread.
+        String service = read(JAVA + "io/github/popzol/heavenfall/app/UpdateService.java");
+        assertTrue(service.contains("ok &= com.mh4u.port.HeavenfallBridge.discardBuild(context, Locations.libraryDir(context));"));
+        String bridge = read(JAVA + "com/mh4u/port/HeavenfallBridge.java");
+        assertTrue(bridge.contains("BuilderService.startOver(app, libraryDir.getAbsolutePath(), false);"));
+        assertTrue(bridge.contains("BuilderService.clearing = true;"));
+        String home = read(JAVA + "io/github/popzol/heavenfall/app/HomeActivity.java");
+        int at = home.indexOf("case DISCARD_JOB:");
+        String discard = home.substring(at, home.indexOf("break;", at));
+        int thread = discard.indexOf("new Thread(");
+        assertTrue(thread >= 0 && thread < discard.indexOf("UpdateService.discard(app)"));
+    }
 }

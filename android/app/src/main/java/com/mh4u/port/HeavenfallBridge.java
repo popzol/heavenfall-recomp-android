@@ -125,6 +125,24 @@ public final class HeavenfallBridge {
         return names != null && names.length > 0;
     }
 
+    /**
+     * Home's Discard of a build cut short: upstream's "start over" without the tools (the work folder, the run's
+     * record, a library copy cut short in {@code libraryDir}), as its own screen does it: no run starts meanwhile. The
+     * objects' cache and the tools stay. Not on the main thread (thousands of files); false while a build runs.
+     */
+    public static boolean discardBuild(Context c, File libraryDir) {
+        if (BuilderService.busy()) return false;
+        BuilderService.clearing = true;
+        Context app = c.getApplicationContext();
+        try {
+            BuilderService.startOver(app, libraryDir.getAbsolutePath(), false);
+        } finally {
+            BuilderService.clearing = false;
+            BuilderService.forget(app);
+        }
+        return true;
+    }
+
     /** The build's state goes back to idle after its end was read (the next start begins clean anyway). */
     public static void buildAcknowledged() {
         BuilderService.Job j = BuilderService.job;

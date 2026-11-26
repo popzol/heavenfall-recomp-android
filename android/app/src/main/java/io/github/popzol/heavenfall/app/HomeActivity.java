@@ -334,11 +334,18 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
                 break;
             case DISCARD_JOB:
                 Actions.askDiscard(this, () -> {
-                    if (!UpdateService.discard(this)) {
-                        android.widget.Toast.makeText(this, str(ScreenTexts.DISCARD_FAILED),
-                                android.widget.Toast.LENGTH_LONG).show();
-                    }
-                    refresh();
+                    android.content.Context app = getApplicationContext();
+                    new Thread(() -> {   // (thousands of files: never on the main thread)
+                        boolean ok = UpdateService.discard(app);
+                        runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) return;
+                            if (!ok) {
+                                android.widget.Toast.makeText(this, str(ScreenTexts.DISCARD_FAILED),
+                                        android.widget.Toast.LENGTH_LONG).show();
+                            }
+                            refresh();
+                        });
+                    }, "heavenfall-discard").start();
                 });
                 break;
             case PLAY:
