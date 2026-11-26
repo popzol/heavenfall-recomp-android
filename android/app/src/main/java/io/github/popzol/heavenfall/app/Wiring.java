@@ -2,17 +2,15 @@ package io.github.popzol.heavenfall.app;
 
 import android.content.Context;
 
+import io.github.popzol.heavenfall.BuilderApplier;
+import io.github.popzol.heavenfall.ModBuilder;
+
 /**
  * Where the parts that need the native library are put in place, once per process (the application class calls it, so
- * a job started by the update receiver or the service has them as well as the screens). Two seams are open:
- *
- * <ul>
- * <li>the dump reading: {@link PhoneReader#setIdentifier} takes a {@link io.github.popzol.heavenfall.DumpIdentifier};
- * until one is set the checks of the game folder's own reader are used (the game and its update; MH XX reads as
- * missing);</li>
- * <li>the mod's applier: {@link UpdateService#setApplier} takes a {@link io.github.popzol.heavenfall.ModApplier};
- * until one is set a stand-in that says so is used.</li>
- * </ul>
+ * a job started by the update receiver or the service has them as well as the screens): the native reader of the
+ * three dumps for the screens' folder scan, and the native applier for the update job. The library
+ * ({@code libheavenfall.so}) is loaded when one of them first reads a file, not at the start of every process (the
+ * game's own process runs this class too).
  */
 final class Wiring {
     private static boolean done;
@@ -20,11 +18,34 @@ final class Wiring {
     private Wiring() {
     }
 
+    /** The native layer, loaded the first time it is asked a question. */
+    private static final class Lazy implements ModBuilder.Backend {
+        private static final class Holder {
+            static final HeavenfallNative NATIVE = new HeavenfallNative();
+        }
+
+        @Override
+        public String identify(int fd) {
+            return Holder.NATIVE.identify(fd);
+        }
+
+        @Override
+        public String setInfo(int fd) {
+            return Holder.NATIVE.setInfo(fd);
+        }
+
+        @Override
+        public String apply(int setFd, int gameFd, int updateFd, int xxFd, int sharedFd, byte[] outDir,
+                            boolean verifySources, ModBuilder.ProgressSink sink) {
+            return Holder.NATIVE.apply(setFd, gameFd, updateFd, xxFd, sharedFd, outDir, verifySources, sink);
+        }
+    }
+
     static synchronized void install(Context context) {
         if (done) return;
         done = true;
-        // The native reader of the three dumps and the native applier are set here:
-        //     PhoneReader.setIdentifier(new <the native identifier>());
-        //     UpdateService.setApplier(new <the native applier>(context));
+        ModBuilder.Backend backend = new Lazy();
+        PhoneReader.setIdentifier(new NativeDumpIdentifier(backend));
+        UpdateService.setApplier(new BuilderApplier(backend, SourceFile::of));
     }
 }

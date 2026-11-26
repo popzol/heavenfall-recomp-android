@@ -29,14 +29,14 @@ import io.github.popzol.heavenfall.UpdateCheck;
  */
 public final class PhoneReader {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
-    private static volatile DumpIdentifier identifier = new UpstreamDumpIdentifier();
+    private static volatile DumpIdentifier identifier;
 
     private PhoneReader() {
     }
 
-    /** The reader of the three dumps (the native one replaces the checks of the game folder's own reader). */
+    /** The reader of the three dumps ({@link Wiring} sets the native one once per process). */
     public static void setIdentifier(DumpIdentifier replacement) {
-        identifier = replacement == null ? new UpstreamDumpIdentifier() : replacement;
+        identifier = replacement;
     }
 
     /** Called on the main thread; {@code done} runs on the main thread with the facts. */
@@ -57,7 +57,9 @@ public final class PhoneReader {
     /** Reads everything; reads files, so never on the main thread. */
     public static PhoneFacts read(Context c) {
         PhoneFacts f = new PhoneFacts();
+        Wiring.install(c);
         HeavenfallScreens.ensureHome(c);
+        Locations.recoverMod(c);   // before anything reads the mod: a swap cut short is put right
         f.appVersion = appVersion(c);
         f.permission = HeavenfallScreens.hasAccess(c);
         File saved = HeavenfallScreens.savedFolder(c);

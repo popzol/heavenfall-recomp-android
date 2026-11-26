@@ -15,6 +15,7 @@ import io.github.popzol.heavenfall.BuildFailures;
 import io.github.popzol.heavenfall.Control;
 import io.github.popzol.heavenfall.Fraction;
 import io.github.popzol.heavenfall.JobPaths;
+import io.github.popzol.heavenfall.LauncherMod;
 import io.github.popzol.heavenfall.LibraryBuilder;
 import io.github.popzol.heavenfall.UpdateException;
 import io.github.popzol.heavenfall.UpdateFailure;
@@ -25,8 +26,12 @@ import io.github.popzol.heavenfall.UpdateFailure;
  * until it ends, cancelled when the job is.
  */
 public final class PhoneLibraryBuilder implements LibraryBuilder {
-    /** phone_build.py's option that takes the mod's folder. */
-    static final String MOD_FLAG = "--mod";
+    /**
+     * phone_build.py's option that takes the app's user folder: the build then reads every code mod that is on in its
+     * load/mods, in the order the game loads them (the same set the game checks the library against). The launcher's
+     * mod is one of them, and the Mods page keeps it on and every other code mod off ({@code LauncherMod}).
+     */
+    static final String MOD_FLAG = "--user-mods";
     private static final long START_WAIT_MS = 15_000;
     private static final long STOP_WAIT_MS = 60_000;
 
@@ -79,7 +84,8 @@ public final class PhoneLibraryBuilder implements LibraryBuilder {
         Runnable wake = changed::release;
         HeavenfallBridge.listen(wake);
         try {
-            HeavenfallBridge.startBuild(context, paths.gameDump, paths.updateDump, libraryDir, MOD_FLAG, paths.modDir);
+            HeavenfallBridge.startBuild(context, paths.gameDump, paths.updateDump, libraryDir, MOD_FLAG,
+                    LauncherMod.userFolder(Locations.home(context)));
             HeavenfallBridge.BuildStatus s = awaitStart(changed, control);
             while (s.active) {
                 progress.fraction(Math.max(0, s.percent) / 100.0);

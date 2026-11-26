@@ -31,7 +31,6 @@ public enum UpdateFailure {
     SELF_NO_ANSWER("hf_fail_self_no_answer", "hf_advice_resume"),
     SELF_FAILED("hf_fail_self_failed", "hf_advice_resume"),
     // applying the mod and building the library
-    APPLY_UNAVAILABLE("hf_fail_apply_unavailable", "hf_advice_update_app"),
     APPLY_FAILED("hf_fail_apply_failed", "hf_advice_resume"),
     BUILD_SPACE("hf_fail_build_space", "hf_advice_space"),
     BUILD_MEMORY("hf_fail_build_memory", "hf_advice_memory"),

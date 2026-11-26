@@ -10,9 +10,11 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import com.mh4u.port.HeavenfallBridge;
 import com.mh4u.port.HeavenfallScreens;
 import com.mh4u.port.R;
 
+import io.github.popzol.heavenfall.AutoPlay;
 import io.github.popzol.heavenfall.HomeModel;
 import io.github.popzol.heavenfall.HomePresenter;
 import io.github.popzol.heavenfall.JobProgress;
@@ -39,6 +41,8 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
     private static boolean assistantOffered;
     private String language;
     private boolean resumed;
+    /** The app was relaunched by its own pages (PhoenixActivity): the game starts at once when it can. */
+    private boolean autoPlay;
 
     private TextView title, versions, state, failureReason, failureAdvice, jobStep, jobTime, jobHint;
     private LinearLayout blocks, notes, jobBox;
@@ -49,6 +53,7 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         language = LanguageSetting.get(this);
+        autoPlay = getIntent().getBooleanExtra(HeavenfallBridge.EXTRA_AUTO_PLAY, false);
         build();
         render();
     }
@@ -197,7 +202,13 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
         if (UpdateService.running()) input.job = HomeModel.Job.RUNNING;
         output = model().compute(input);
         offerAssistant();
+        if (resumed && UpdateService.running()) Actions.askNotifications(this);
         render();
+        if (autoPlay && resumed) {   // the first reading after a relaunch of the app's own: it starts the game as the entry did
+            autoPlay = false;
+            getIntent().removeExtra(HeavenfallBridge.EXTRA_AUTO_PLAY);
+            if (AutoPlay.start(true, output)) Actions.play(this, facts);
+        }
     }
 
     @Override

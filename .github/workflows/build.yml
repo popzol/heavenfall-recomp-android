@@ -39,12 +39,17 @@ jobs:
             echo "The tag is $GITHUB_REF_NAME but heavenfall/VERSION says $V." >&2
             exit 1
           fi
-      - name: Tools (CMake, Ninja, NDK 27.0.12077973)
+      - name: Tools (CMake, Ninja, NDK 27.0.12077973, the SDK's CMake 3.22.1)
         run: |
           pip install cmake ninja
+          # the SDK's CMake is the one Gradle's externalNativeBuild asks for (libheavenfall.so)
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "platforms;android-35" "ndk;27.0.12077973" >/dev/null
+            "platforms;android-35" "ndk;27.0.12077973" "cmake;3.22.1" >/dev/null
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+      - name: Native host tests (the patch set's applier and its JNI layer)
+        run: sh heavenfall/jni/test/run_tests.sh
+      - name: Release file tool
+        run: python -m unittest discover -s heavenfall/tools
       - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: build/sdl3
@@ -90,15 +95,20 @@ jobs:
           else
             cp android/app/build/outputs/apk/debug/app-debug.apk Heavenfall-android-debug.apk
           fi
-      - name: Checksum
+      - name: Checksum and release file
         if: env.IS_RELEASE == 'true'
-        run: sha256sum Heavenfall-android.apk > Heavenfall-android.apk.sha256
+        run: |
+          sha256sum Heavenfall-android.apk > Heavenfall-android.apk.sha256
+          # the file the app reads when GitHub's API gives no usable answer: GitHub's "latest release" shape
+          python heavenfall/tools/make_release_json.py --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
+            --out Heavenfall-android-release.json Heavenfall-android.apk Heavenfall-android.apk.sha256
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: apk
           path: |
             Heavenfall-android*.apk
             Heavenfall-android.apk.sha256
+            Heavenfall-android-release.json
           if-no-files-found: error
       - name: Release (on a v* tag)
         if: env.IS_RELEASE == 'true'
@@ -106,7 +116,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" Heavenfall-android.apk Heavenfall-android.apk.sha256 \
+          gh release create "$TAG" Heavenfall-android.apk Heavenfall-android.apk.sha256 Heavenfall-android-release.json \
             --target "$GITHUB_SHA" --title "Heavenfall ${TAG#v}" --generate-notes \
             --notes "Heavenfall is a modified version of 4u-native by khorne-hub (https://github.com/khorne-hub/4u-native). It is not the original and is not made or endorsed by khorne-hub. It holds no game data."
       - name: Remove the signing key

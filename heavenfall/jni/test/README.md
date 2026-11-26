@@ -14,12 +14,15 @@ sets with Heavenfall's own writer (`core/install/title/patchset.py`), and takes 
 folder for plain files and from Heavenfall's reference driver (`tests/install/title/patchset_driver.c`, built with the
 host gcc) for the ARCs, whose deflated bytes only a deflate gives.
 
+The dumps are named `made_up_<name>.cxi.bin` or `.cia.bin`: made-up bytes, and a name the repository's `.gitignore`
+(which drops every `*.cxi` and `*.cia`, as it must for real dumps) keeps.
+
 | File | What it is |
 |---|---|
-| `game.cxi`, `game_eur.cxi` | the American and the European base game |
-| `update.cia`, `update.cxi` | the American update, as a decrypted CIA and as a bare NCCH |
-| `update_eur.cia`, `update_other.cia`, `update_locked.cia` | the European update, another revision of the American one, an encrypted one |
-| `xx.cxi` | MH XX |
+| `made_up_game.cxi.bin`, `made_up_game_eur.cxi.bin` | the American and the European base game |
+| `made_up_update.cia.bin`, `made_up_update.cxi.bin` | the American update, as a decrypted CIA and as a bare NCCH |
+| `made_up_update_eur.cia.bin`, `made_up_update_other.cia.bin`, `made_up_update_locked.cia.bin` | the European update, another revision of the American one, an encrypted one |
+| `made_up_xx.cxi.bin` | MH XX |
 | `android.hfpatch`, `shared.hfpack` | a format 4 set with the release's shared file |
 | `android_xx.hfpatch` | a format 4 set made with MH XX |
 | `format3.hfpatch`, `set_newer.hfpatch`, `set_cut.hfpatch`, `bad_path.hfpatch` | a console set; a set of a newer format; a cut set; a set naming a file outside the mod's folder |

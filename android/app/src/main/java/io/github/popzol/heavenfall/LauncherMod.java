@@ -24,9 +24,17 @@ public final class LauncherMod {
     private LauncherMod() {
     }
 
+    /**
+     * {@code <home>/user}: the user folder the game runs its mods from, and the folder the code library's build takes
+     * ({@code phone_build.py --user-mods}: every code mod that is on in its {@code load/mods}, as the game loads them).
+     */
+    public static File userFolder(File home) {
+        return new File(home, "user");
+    }
+
     /** {@code <home>/user/load/mods}. */
     public static File modsFolder(File home) {
-        return new File(new File(home, "user"), "load/mods");
+        return new File(userFolder(home), "load/mods");
     }
 
     public static File modDir(File home) {

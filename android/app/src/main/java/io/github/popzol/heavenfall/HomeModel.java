@@ -199,11 +199,7 @@ public final class HomeModel {
                 out.state = new Text("hf_state_app_update", out.targetVersion);
             }
             out.button = new Text("hf_btn_update_to", out.targetVersion);
-            List<Block> blocks = new ArrayList<>();
-            if ((modNewer || xxCame) && in.update != Source.GOOD) {
-                blocks.add(sourceBlock("update", in.update));
-            }
-            blocks.addAll(heavy(in, build));
+            List<Block> blocks = heavy(in, build);
             out.blocks = blocks;
             out.enabled = blocks.isEmpty();
             out.canPlay = playable;
@@ -266,8 +262,8 @@ public final class HomeModel {
                 : new Check(folder, CheckStatus.MISSING, true, in.storage == Storage.NO_FOLDER
                         ? new Block(new Text("hf_problem_folder"), new Text("hf_advice_folder")) : null));
         list.add(sourceCheck("game", in.game, true));
-        // the update is read again only to apply a mod: once one is installed it is no longer a setup need
-        list.add(sourceCheck("update", in.update, in.installed == null));
+        // the update's dump is always a setup need: the library's build and the game's start both read it, installed or not
+        list.add(sourceCheck("update", in.update, true));
         list.add(sourceCheck("xx", in.xx, false));
         return list;
     }
@@ -331,12 +327,10 @@ public final class HomeModel {
             set.add(More.GAME_FOLDER);
             set.add(More.MH_XX);
         }
-        if (in.installed != null) {
+        if (in.installed != null && in.storage == Storage.READY && in.game == Source.GOOD && in.update == Source.GOOD) {
+            // both start a job that reads the two dumps (the build and the mod's maker): never offered without them
             set.add(More.REBUILD);
-            if (in.storage == Storage.READY && in.game == Source.GOOD && in.update == Source.GOOD
-                    && in.latestMod != null) {
-                set.add(More.REINSTALL);
-            }
+            if (in.latestMod != null) set.add(More.REINSTALL);
         }
         return set;
     }

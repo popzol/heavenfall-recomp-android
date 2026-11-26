@@ -1,13 +1,19 @@
 package io.github.popzol.heavenfall.app;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.widget.Toast;
 
+import com.mh4u.port.HeavenfallBridge;
 import com.mh4u.port.HeavenfallScreens;
 
 import io.github.popzol.heavenfall.DumpScan;
 import io.github.popzol.heavenfall.Editions;
 import io.github.popzol.heavenfall.JobPaths;
+import io.github.popzol.heavenfall.NotificationAsk;
 import io.github.popzol.heavenfall.PhoneFacts;
 import io.github.popzol.heavenfall.ScreenTexts;
 import io.github.popzol.heavenfall.StartChoice;
@@ -50,13 +56,38 @@ final class Actions {
                 new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.NOT_NOW), false, null));
     }
 
+    private static final String NOTIFY_PREFS = "heavenfall_notify";
+    private static final String NOTIFY_ASKED = "asked";
+    private static final int NOTIFY_REQUEST = 4711;
+
+    /**
+     * Android 13 and later: when the first job runs, says why the job's notification is useful and asks Android to
+     * show notifications ({@link NotificationAsk}); once, whatever the answer. The job runs the same without it.
+     */
+    static void askNotifications(Activity a) {
+        if (Build.VERSION.SDK_INT < NotificationAsk.FIRST_SDK) return;
+        boolean granted = a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        boolean asked = a.getSharedPreferences(NOTIFY_PREFS, Context.MODE_PRIVATE).getBoolean(NOTIFY_ASKED, false);
+        if (!NotificationAsk.shouldAsk(Build.VERSION.SDK_INT, granted, asked)) return;
+        a.getSharedPreferences(NOTIFY_PREFS, Context.MODE_PRIVATE).edit().putBoolean(NOTIFY_ASKED, true).apply();
+        HeavenfallScreens.notice(a, Texts.resolve(a, ScreenTexts.NOTIFY_TITLE), Texts.resolve(a, ScreenTexts.NOTIFY_TEXT),
+                new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.ALLOW), true,
+                        () -> a.requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, NOTIFY_REQUEST)),
+                new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.NOT_NOW), false, null));
+    }
+
     /**
      * Plays: the game's small files are made from the two dumps when they are not current, then the entry flow of the
      * game folder runs its own checks and starts the game (it shows its page when something is wrong).
      */
     static void play(Activity a, PhoneFacts facts) {
         DumpScan.Found found = facts.found;
+        if (HeavenfallBridge.gameStarted()) {   // the game runs in this process already (Home came over it): back to it
+            a.finish();
+            return;
+        }
         Thread t = new Thread(() -> {
+            Locations.recoverMod(a);   // the game reads the mod: a swap cut short is put right first
             String problem = found.gameFile != null && found.updateFile != null
                     ? HeavenfallScreens.prepareGame(a, found.gameFile, found.updateFile) : null;
             a.runOnUiThread(() -> {

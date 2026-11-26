@@ -45,7 +45,8 @@ public final class Identity {
             case "xx": kind = Kind.XX; break;
             default: throw new IllegalArgumentException("unknown kind " + kv.string("kind"));
         }
-        return new Identity(kv.integer("rc"), kind, kv.string("region"), kv.flag("encrypted"), kv.string("title"),
+        return new Identity(kv.integer("rc"), kind, kv.string("region"), kv.flag("encrypted"),
+                TitleIds.normalize(kv.string("title")),
                 kv.hash("revision"));
     }
 
