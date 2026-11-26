@@ -26,7 +26,7 @@ class Unpredictable(Unsupported):
     """Architecturally UNPREDICTABLE encodings; compilers never emit these."""
 
 
-@dataclass
+@dataclass(slots=True)   # (millions are alive at once while a whole game is translated: no __dict__ each)
 class Insn:
     addr: int
     size: int

@@ -1,0 +1,41 @@
+{
+ "format": 1,
+ "compile": {
+  "job_mb": 200,
+  "base_mb": 75,
+  "mb_per_mib_of_c": 185,
+  "reserve_mb": 400,
+  "poll_s": 2
+ },
+ "translation": {
+  "peak_mb": 1400
+ },
+ "space": {
+  "dump_mb": 40,
+  "sources_mb": 360,
+  "objects_mb": 160,
+  "zig_copies_mb": 160,
+  "library_mb": 130,
+  "cache_floor_mb": 160
+ },
+ "cache": {
+  "keep_free_mb": 1024,
+  "max_mb": 2048
+ },
+ "why": {
+  "compile.job_mb": "the most memory one compile may take: the recompiled C is cut into units that fit it (recomp/units.py), and the jobs that run at once share what the device has free",
+  "compile.base_mb": "a compile's memory before its C: the compiler with the runtime's headers, and Zig's driver",
+  "compile.mb_per_mib_of_c": "what each MiB of a unit's C adds to its compile's peak (measured over units of 4 KB to 2 MB)",
+  "compile.reserve_mb": "memory left to the system and the app while compiling: the jobs never count on it",
+  "compile.poll_s": "how often the free memory is read again while compiling (the jobs come down when it does)",
+  "translation.peak_mb": "the translation's peak memory (one process: the analysis of the whole code, then its C), checked before it starts",
+  "space.dump_mb": "the executable and its header extracted from the update",
+  "space.sources_mb": "the recompiled C",
+  "space.objects_mb": "the compiled objects (the cache shares their files when it can)",
+  "space.zig_copies_mb": "Zig's own copy of each object while compiling",
+  "space.library_mb": "the library, made beside the objects, then copied to the game's folder",
+  "space.cache_floor_mb": "the least the objects' cache keeps (one build's objects), so a mod update compiles only what changed",
+  "cache.keep_free_mb": "the cache grows only while this much of the disk stays free; past it the oldest objects go",
+  "cache.max_mb": "the most the cache keeps whatever the free space"
+ }
+}
