@@ -149,9 +149,15 @@ class FunctionEmitter:
                 out = wrap(ins, ins.body + [f"u32 t_ = {ins.pcexpr};", "if (RC_IS_RETURN(t_)) RC_RET(t_);",
                                             "RC_FALL_EXPECT();", FLUSH, "rc_call(ctx, t_);", "return;"])
         elif k == JTAB:
-            cases = " ".join(f"case {i}u: goto {label(t)};" for i, t in enumerate(f.jtabs[ins.addr]))
-            out = wrap(ins, [f"switch (R({ins.jt_index})) {{ {cases} default: "
-                             f"{FLUSH} rc_trap(ctx, {hexc(ins.addr)}, RC_TRAP_BAD_JUMP); return; }}"])
+            # a case outside the function (a mod's code cave, Analyzer._step) is a tail call, as a B there is
+            cases = " ".join(f"case {i}u: goto {label(t)};" if t in f.labels else
+                             f"case {i}u: RC_FALL_EXPECT(); {self.call(t, 'arm')} return;"
+                             for i, t in enumerate(f.jtabs[ins.addr]))
+            # past a table with no known bound (Analyzer.open_table) the interpreter runs the jump and the rest
+            # of the function, from this instruction
+            default = (f"RC_FALL_EXPECT(); {FLUSH} rc_call(ctx, {hexc(ins.addr)}); return;" if ins.addr in f.open_jtabs
+                       else f"{FLUSH} rc_trap(ctx, {hexc(ins.addr)}, RC_TRAP_BAD_JUMP); return;")
+            out = wrap(ins, [f"switch (R({ins.jt_index})) {{ {cases} default: {default} }}"])
         else:
             raise ValueError(k)
         if ins.addr in f.fall_tail:

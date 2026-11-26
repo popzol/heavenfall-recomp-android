@@ -324,6 +324,12 @@ def check_version(header: exh.ExHeader, code: bytes, versions_path: str | None =
     return None
 
 
+def same_version(a: dict | None, b: dict | None) -> bool:
+    """Two entries of config/versions.json name the same version (each caller may have read the file itself)."""
+    return a is b or (a is not None and b is not None
+                      and a.get("key") == b.get("key") and a.get("name") == b.get("name"))
+
+
 def buildable(version: dict) -> bool:
     """The tables are for the target version; another one needs its shifts (tools/version_map.py)."""
     return bool(version.get("target") or version.get("shifts"))
@@ -347,6 +353,51 @@ def translate_tables(version: dict, entries: dict, hooks: dict, tunables: dict) 
                                      + [f"tunable 0x{a:08x}" for a in missing_tunables])
                          + f" ({version['shifts']}; rebuild it with tools/version_map.py)")
     return entries, hooks, tunables
+
+
+def check_app_addresses(args, version: dict | None, header: exh.ExHeader, reference: bytes | None, code: bytes,
+                        hooks: dict, tunables: dict, mod_header: exh.ExHeader | None = None) -> dict[int, int]:
+    """A code mod with its own exheader, made from this dump's version (`reference`, its unmodified code laid out by
+    `header`), must keep every address the port uses where that version has it (game_version.place_check): otherwise
+    the port would read, call and hook other things, and the build stops naming them. One of the port's own addresses
+    the mod moved whole into its own memory (`mod_header` maps it) is followed instead: returned as {the version's
+    address: the mod's}, for the library's table (carried_table)."""
+    if reference is None:
+        print("  (the mod's code is made from another version than this dump's: the port's addresses in it aren't "
+              "checked)")
+        return {}
+    target = version or {"target": True}
+    try:
+        functions = game_version.functions_here(target, build_function_table.read_tsv(args.functions))
+        port = game_version.load_port_addresses(args.port_addresses)
+        wanted = game_version.app_addresses(target, port, hooks, tunables)
+        carriable = set(a for a, name in wanted if not name.startswith(("hook ", "tunable ")))
+    except (OSError, KeyError, ValueError) as e:
+        raise SystemExit(f"the port's addresses can't be read: {e}") from None
+    own = game_version.own_memory(header, mod_header) if mod_header is not None else None
+    moved, carried = game_version.place_check(reference, code, header, functions, wanted, own, carriable)
+    if moved:
+        raise SystemExit(f"the code mod moved {len(moved)} of the {len(wanted)} addresses the port uses (its code "
+                         "would read, call and hook other things there): " + "; ".join(moved))
+    for a, new, name in carried:
+        print(f"  the code mod moved the port's {name} from 0x{a:08X} to 0x{new:08X} (every word of the game's code "
+              "that held it holds that): the library uses the mod's")
+    game = target.get("name", "the game")
+    print(f"  the {len(wanted) - len(carried)} other addresses the port uses are where {game} has them in the mod's "
+          "code" if carried else f"  the {len(wanted)} addresses the port uses are where {game} has them in the "
+          "mod's code")
+    return {a: new for a, new, _ in carried}
+
+
+def carried_table(table: list[tuple[int, int]], port: list[tuple[int, str]],
+                  carried: dict[int, int]) -> list[tuple[int, int]]:
+    """The library's (USA v1.3.0 address, this build's) pairs with the mod's moves (`carried`, by this version's
+    address) in them. A USA v1.3.0 library has no table (`table` empty): with a move it gets one with every port
+    address, the others as they are (the runtime takes an address a table lacks for unknown)."""
+    if not carried:
+        return table
+    pairs = table or [(a, a) for a, _ in port]
+    return sorted(set((usa, carried.get(here, here)) for usa, here in pairs))
 
 
 def mod_folders(args, program_id: int) -> list[str]:
@@ -492,6 +543,7 @@ def main(argv=None) -> int:
     with open(os.path.join(dump_dir, "exheader.bin"), "rb") as f:
         exheader_bytes = f.read()
     header = exh.parse(exheader_bytes)
+    dump_header = header
     with open(os.path.join(dump_dir, "code.bin"), "rb") as f:
         code = codebin2elf.load_code(header, f.read())
     versions = game_version.load_versions(args.versions)
@@ -514,6 +566,7 @@ def main(argv=None) -> int:
     used, changes_code = [], False
     unmodded_code = code
     mod_code = None          # a code mod's exheader.bin and the version its code is made from
+    manifest = None          # what that mod says of its own code (code_mods.MANIFEST)
     folders = mod_folders(args, program_id)
     if folders:
         for kind, a, b in code_mods.code_conflicts([code_mods.describe_mod(os.path.dirname(f), os.path.basename(f))
@@ -534,7 +587,7 @@ def main(argv=None) -> int:
             used.append(override[0])
         if used:
             print("code mods: " + ", ".join(used))
-            if mod_code is not None and mod_code.version is not version:
+            if mod_code is not None and not same_version(mod_code.version, version):
                 print(f"  the mod's code is made from {mod_code.version['name']} ({mod_code.version.get('key')}), "
                       "not from this dump's version: the library is made with that version's addresses")
             else:
@@ -554,7 +607,7 @@ def main(argv=None) -> int:
             code = modded
         if mod_code is not None:
             header = mod_code.header
-            if mod_code.version is not version:
+            if not same_version(mod_code.version, version):
                 unmodded_code = None   # (another version's code: no bytes of it to compare the mod's with)
                 version = mod_code.version
                 if not buildable(version):
@@ -565,6 +618,20 @@ def main(argv=None) -> int:
                 start, end = mod_code.extension
                 print(f"  the mod's code past the game's data: 0x{start:08X}-0x{end:08X} (0x{end - start:X} bytes), "
                       "recompiled where the code reaches it")
+            path = code_mods.manifest_path(folders)
+            if path:
+                try:
+                    manifest = code_mods.load_manifest(path, program_id, code, mod_code.extension)
+                except code_mods.ModError as e:
+                    print(f"  warning: {e}: it is not used (the mod's code is recompiled where the code reaches it, "
+                          "and its functions that only a pointer reaches run in the interpreter)")
+                else:
+                    print(f"  the mod names its own code ({code_mods.MANIFEST}): "
+                          + (", ".join(f"0x{s:08X}-0x{e:08X}" for s, e in manifest.ranges) or "none past its data")
+                          + f", {len(manifest.entries)} entry points")
+                    for p in manifest.packs:
+                        print(f"  its pack {p.file}, which its code loads at 0x{p.address:08X} "
+                              f"(0x{len(p.data):X} bytes): {len(p.entries)} entry points, recompiled at that address")
 
     out = os.path.join(args.out, "recomp")
     print("recompiling (a couple of minutes)")
@@ -575,7 +642,7 @@ def main(argv=None) -> int:
     # a code mod's new code in the read-only data (some mods put their routines there, which only an
     # emulator runs as it is): the runs of bytes the mod changed there, 16 bytes or longer, may hold code
     extra_code = []
-    if changes_code and unmodded_code is not None:
+    if changes_code and unmodded_code is not None and manifest is None:   # (a mod's manifest names all its code)
         ro_start = header.ro.address - header.text.address
         ro_end = ro_start + header.ro.padded_size  # (the padding after it too: a mod may put code there)
         run = None
@@ -590,12 +657,21 @@ def main(argv=None) -> int:
         if extra_code:
             print(f"  the code mod changes {len(extra_code)} stretches of the read-only data that may hold code: "
                   "recompiled too where the code reaches them")
-    if mod_code is not None and mod_code.extension:
+    if manifest is not None:
+        extra_code += manifest.ranges
+    elif mod_code is not None and mod_code.extension:
         extra_code.append(mod_code.extension)
-    img = Image(code, header.text.address, size, extra_code)
+    # (a branch of the mod's into code nothing above names, a "code cave" in the data, runs in the interpreter)
+    img = Image(code, header.text.address, size, extra_code, interpret_outside=changes_code,
+                regions=[(p.address, p.data) for p in manifest.packs] if manifest is not None else None)
     entries, hooks, tunables = translate_tables(
         version or {}, recompile.load_entries(args.functions, [args.extra] if args.extra else []),
         recompile.load_hooks(args.hooks), recompile.load_tunables(args.tunables))
+    if manifest is not None:    # (the mod's own addresses: no version's shifts apply to them)
+        entries = {**entries, **manifest.all_entries()}
+    carried = {}
+    if mod_code is not None:
+        carried = check_app_addresses(args, version, dump_header, unmodded_code, code, hooks, tunables, mod_code.header)
     if changes_code:
         # (what of the code the port hooks, tunes or calls the mod changed: those features may not work with it)
         reference = unmodded_code if unmodded_code is not None else game_version.reference_code(
@@ -620,15 +696,22 @@ def main(argv=None) -> int:
         print(f"  warning: {p}")
     # what the runtime is told about the game version (beside the recompiled code, which recompile() keeps clean)
     try:
-        table = game_version.port_table(version or {"target": True},
-                                        game_version.load_port_addresses(args.port_addresses))
+        port = game_version.load_port_addresses(args.port_addresses)
+        table = carried_table(game_version.port_table(version or {"target": True}, port), port, carried)
     except game_version.VersionError as e:
         raise SystemExit(str(e)) from None
+    if carried:     # (in the report too, beside the recompiler's numbers)
+        names = dict(port)
+        with open(os.path.join(out, "report.txt"), "a") as f:
+            for a, new in sorted(carried.items()):
+                f.write(f"moved by the mod: {names.get(a, '?')} 0x{a:08x} -> 0x{new:08x}\n")
     ext = game_version.extension_crc(code, header.text.address, mod_code.extension if mod_code else None)
+    packs = [game_version.pack_record(p.file, p.data) for p in manifest.packs] if manifest is not None else []
     with open(os.path.join(out, "src", game_version.SOURCE_NAME), "w", encoding="ascii", newline=chr(10)) as f:
         f.write(game_version.version_source((version or {}).get("key", "unknown"),
-                                            code_library_id(args.native, args.deterministic, pc=args.pc), table, ext))
-    if table:
+                                            code_library_id(args.native, args.deterministic, pc=args.pc), table, ext,
+                                            packs))
+    if table and not carried:
         print(f"game version {version.get('key')}: {len(table)} of the port's addresses moved to it")
 
     # the game's geometry shaders as C beside the recompiled code (a stale file from an earlier build goes)
