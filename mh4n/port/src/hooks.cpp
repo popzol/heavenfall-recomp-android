@@ -9,6 +9,7 @@
 #include "onescreen.h"
 #include "swkbd_bridge.h"
 #include "gather.h"  // (gather everything in one press, 1.0.1)
+#include "hud_face.h"  // (where Heavenfall's HUD draws the target face, and the HUD size it was made with)
 
 #include <algorithm>
 #include <atomic>
@@ -1181,7 +1182,7 @@ constexpr HudObject HUD_OBJECTS[] = {
     {0x174E41A5, HUD_PARTY, 0, 0, 0, 0},
     {0x892AD406, HUD_PARTY, 0, 0, 0, 0},
     {0, HUD_MAP, 300, 44, 366, 120},  // (the area objects: MapObjectHashes)
-    {0x42A3E03D, HUD_TARGET, 361, 13, 388, 38},
+    {0x42A3E03D, HUD_TARGET, 361, 13, 388, 38},  // (where the old single-screen mod drew it: the mod's face is boxed by NoteTargetFace)
     {0x1833E2C8, HUD_ITEMS, 296, 193, 347, 224},
     {0x3C598C15, HUD_ITEMS, 273, 223, 377, 238},
     {0x18AFCC8C, HUD_ITEMS, 269, 179, 389, 192},
@@ -1224,6 +1225,11 @@ static_assert(HUD_OBJECTS[HUD_MAP_WHOLE].hash == 0 && HUD_OBJECTS[HUD_MAP_WHOLE]
 // projection of the object's copy of the pass's constants (OneScreen::ScaleObject, as the single-screen menus'), so what
 // the game's code places inside the part (the map's icons, a weapon's gauge, the counts) follows with no patch.
 constexpr float HUD_ANCHOR[HUD_PART_COUNT][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {400, 0}, {400, 0}, {400, 240}};
+// The parts whose static boxes (HUD_OBJECTS: the game's own HUD, measured at the size 1) Heavenfall's HUD size (the mod's
+// hud_scale: its layouts shrink towards the same corners, core/interface/hud/build.py HUD_LAYOUTS) draws smaller. Not the
+// map (the code places it with its own translation, which this does not know) nor the target camera (its box is where
+// the object is drawn, NoteTargetFace).
+constexpr bool HUD_MOD_SCALED[HUD_PART_COUNT] = {true, true, true, true, false, false, true};
 // The game's other HUD in a quest, with hud_size alone, each toward its own anchor (their layouts' boxes, USA v1.3.0,
 // eng/data/core_quest.arc and core_common.arc): the grab, fishing and mounting bars (ui204: bottom middle; its Frenzy at
 // the names, top left), the "Quest Complete" stamp (ui207: the middle), the yes / no windows (ui220, ui221: the middle),
@@ -1389,6 +1395,7 @@ bool WatchingQuestMap();                         // the quest's touch panels (be
 bool WatchingQuestItems();
 void NoteTouchScreenObject(float x, float y);
 void NoteHudObject(int object);                  // the game's state (below)
+void NoteTargetFace(int object, float x, float y);  // (where the target camera's copy is drawn: the target part's box)
 
 /// 0x00ae65a4(object, cDraw): uploads a layout object's translation and colour.
 void LayoutObjectConstants(RCtx* ctx, RFunc original) {
@@ -1441,6 +1448,11 @@ void LayoutObjectConstants(RCtx* ctx, RFunc original) {
     // the part at its side's edge of a wider picture, and where the player put it (pixels right and down; layout x
     // grows to the left, y up)
     const int part = map_icon ? HUD_MAP : HUD_OBJECTS[object_index].part;
+    if (part == HUD_TARGET) {
+        // the group's translation as the game uploaded it, before the hooks' own move below: the mod puts the
+        // face where it wants (hud_face.h), not where the static box was measured
+        NoteTargetFace(object_index, ReadF32(ctx, constants), ReadF32(ctx, constants + 4));
+    }
     const float dx = HUD_SIDE[part] * (rows != 0 ? (static_cast<float>(rows) - TOP_ROWS) / 2.0f : 0.0f) +
                      options.hud_dx[part];
     const float dy = options.hud_dy[part];
@@ -2408,6 +2420,41 @@ void NoteHudObject(int object) {
     hud_drawn_at[HUD_OBJECTS[object].part] = frames;
 }
 
+// Where the mod draws the target camera's face, the box of its object where the game draws it (the 400x240 pixels, the
+// last frame it was drawn; HUD_OBJECTS' is where it was measured once, which the mod's HUD size and its code moved), and
+// the HUD size the mod has, told by that place (hud_face.h; 0 not known yet, then the boxes are the game's own).
+float hud_object_box[HUD_OBJECT_COUNT][4] = {};
+bool hud_object_box_set[HUD_OBJECT_COUNT] = {};
+float mod_hud_size = 0.0f;
+
+void NoteTargetFace(int object, float x, float y) {
+    const float f = HudFace::ModScale(x, y);
+    if (f == 0.0f) {
+        return;  // (not the mod's face: the static box stays)
+    }
+    // (the pixels' box the state's code adds one to: HUD_OBJECTS' boxes name their last pixel)
+    const HudFace::Box b = HudFace::FaceBox(x, y, f);
+    hud_object_box[object][0] = b.x0, hud_object_box[object][1] = b.y0;
+    hud_object_box[object][2] = b.x1 - 1.0f, hud_object_box[object][3] = b.y1 - 1.0f;
+    hud_object_box_set[object] = true;
+    mod_hud_size = f;
+}
+
+/// HUD_OBJECTS' object `i`'s box (the 400x240 pixels, last pixel included) where it is drawn: the box seen where the
+/// game draws it (the target's), else the static one, as Heavenfall's HUD size draws it once the mod's size is known.
+void ObjectBox(int i, float out[4]) {
+    if (hud_object_box_set[i]) {
+        std::copy_n(hud_object_box[i], 4, out);
+        return;
+    }
+    const HudObject& o = HUD_OBJECTS[i];
+    HudFace::Box b = {o.x0, o.y0, o.x1 + 1.0f, o.y1 + 1.0f};
+    if (HUD_MOD_SCALED[o.part] && mod_hud_size != 0.0f) {
+        b = HudFace::ScaledToward(b, HUD_ANCHOR[o.part][0], HUD_ANCHOR[o.part][1], mod_hud_size);
+    }
+    out[0] = b.x0, out[1] = b.y0, out[2] = b.x1 - 1.0f, out[3] = b.y1 - 1.0f;
+}
+
 /// A pointer to a game object in the application heap (or 0).
 bool HeapPointer(u32 p) {
     return p >= 0x08000000 && p < 0x10000000 && (p & 3) == 0;
@@ -3211,7 +3258,7 @@ void UpdateGameState(RCtx* ctx) {
     const float width = WideRows() ? static_cast<float>(WideRows()) : static_cast<float>(TOP_ROWS);
     s.top_width = static_cast<int>(width);
     for (int k = 0; k < HUD_PART_COUNT; ++k) {
-        // its box: its objects' drawn in the last frames, or its first object's
+        // its box: its objects' drawn in the last frames, or its first object's (ObjectBox)
         float box[4] = {1e9f, 1e9f, -1e9f, -1e9f};
         int first = -1;
         for (int i = 0; i < HUD_OBJECT_COUNT; ++i) {
@@ -3223,13 +3270,14 @@ void UpdateGameState(RCtx* ctx) {
                 first = i;
             }
             if (hud_object_drawn_at[i] != 0 && frames - hud_object_drawn_at[i] <= HUD_PART_FRAMES) {
-                box[0] = std::min(box[0], o.x0), box[1] = std::min(box[1], o.y0);
-                box[2] = std::max(box[2], o.x1), box[3] = std::max(box[3], o.y1);
+                float b[4];
+                ObjectBox(i, b);
+                box[0] = std::min(box[0], b[0]), box[1] = std::min(box[1], b[1]);
+                box[2] = std::max(box[2], b[2]), box[3] = std::max(box[3], b[3]);
             }
         }
         if (box[2] < box[0] && first >= 0) {
-            const HudObject& o = HUD_OBJECTS[first];
-            box[0] = o.x0, box[1] = o.y0, box[2] = o.x1, box[3] = o.y1;
+            ObjectBox(first, box);
         }
         GameState::HudPart& out = s.hud[k];
         out.shown = hud_drawn_at[k] != 0 && frames - hud_drawn_at[k] <= HUD_PART_FRAMES ? 1 : 0;
@@ -3267,7 +3315,12 @@ void UpdateGameState(RCtx* ctx) {
         const float dx = (width - TOP_ROWS) / 2.0f + HUD_SIDE[HUD_ITEMS] *
                          (rows != 0 ? (static_cast<float>(rows) - TOP_ROWS) / 2.0f : 0.0f) + options.hud_dx[HUD_ITEMS];
         const float dy = options.hud_dy[HUD_ITEMS];
-        constexpr float X0 = 273, Y0 = 193, X1 = 378, Y1 = 239;  // (HUD_OBJECTS' selection and name)
+        // (HUD_OBJECTS' selection and name, at Heavenfall's HUD size once it is known)
+        HudFace::Box bar_art = {273, 193, 378, 239};
+        if (mod_hud_size != 0.0f) {
+            bar_art = HudFace::ScaledToward(bar_art, HUD_ANCHOR[HUD_ITEMS][0], HUD_ANCHOR[HUD_ITEMS][1], mod_hud_size);
+        }
+        const float X0 = bar_art.x0, Y0 = bar_art.y0, X1 = bar_art.x1, Y1 = bar_art.y1;
         // (1.0.2: at the bar's size, toward its corner)
         const float k = bar.scale, ax = HUD_ANCHOR[HUD_ITEMS][0] + dx, ay = HUD_ANCHOR[HUD_ITEMS][1] + dy;
         s.item_bar_shown = 1;
@@ -3987,7 +4040,9 @@ std::vector<std::string> Install(const RCodeInfo& info) {
     }
     for (int i = 0; i < HUD_OBJECT_COUNT; ++i) {
         hud_object_drawn_at[i] = 0;
+        hud_object_box_set[i] = false;
     }
+    mod_hud_size = 0.0f;
     {
         std::lock_guard lock(game_state_mutex);
         game_state = game_state_logged = GameState{};
