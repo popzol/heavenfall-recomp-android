@@ -50,13 +50,16 @@ Everything this writes is made from the player's own game and stays on the phone
 from __future__ import annotations
 
 import argparse
+import contextlib
 import errno
 import hashlib
 import io
 import os
 import re
 import shutil
+import signal
 import struct
+import subprocess
 import sys
 import threading
 import time
@@ -278,6 +281,88 @@ class Tail(io.TextIOBase):
 
     def flush(self):
         sys.__stderr__.flush()
+
+
+class Failures:
+    """The commands the build ran through subprocess.run that ended badly (their words, their exit, their stderr's
+    tail), the last few: a step that stops the build with no message of its own (recomp/build.py raises SystemExit with
+    its command's stderr, empty when a signal killed it) still leaves what is known of it here, for the log."""
+
+    KEEP = 8
+
+    def __init__(self):
+        self.items: list[tuple[str, int, str]] = []
+
+    def add(self, argv, rc: int, stderr) -> None:
+        words = " ".join(str(a) for a in argv) if isinstance(argv, (list, tuple)) else str(argv)
+        self.items = (self.items + [(words[:300], rc, (stderr or "")[-1500:])])[-self.KEEP:]
+
+    @contextlib.contextmanager
+    def watching(self):
+        real = subprocess.run
+
+        def run(*popenargs, **kwargs):
+            r = real(*popenargs, **kwargs)
+            if r.returncode:
+                self.add(popenargs[0] if popenargs else kwargs.get("args", ""), r.returncode, r.stderr)
+            return r
+        subprocess.run = run
+        try:
+            yield
+        finally:
+            subprocess.run = real
+
+
+def exit_words(rc: int) -> str:
+    """A return code as it reads in the log: a negative one is the signal that killed the process."""
+    if rc < 0:
+        try:
+            name = signal.Signals(-rc).name
+        except ValueError:
+            name = "an unknown signal"
+        return f"killed by {name} (signal {-rc})"
+    if 128 < rc < 160:
+        return f"exit {rc} (128 + {rc - 128}: what a kill by signal {rc - 128} shows as in a shell)"
+    return f"exit {rc}"
+
+
+def stop_report(stage: str, message: str, tail: str, failures: Failures) -> list[str]:
+    """What is known when a build stops, as log lines: the stage, the message (or that there was none), the commands
+    that ended badly and the build's stderr."""
+    message = " ".join(str(message).split())
+    lines = [f"the build stopped in the {stage} stage" + (f": {message}" if message else "")]
+    if not message:
+        lines.append("  the step that stopped it gave no message")
+    for words, rc, err in failures.items:
+        err = err.strip()
+        lines.append(f"  a command that ended badly: {words} -> {exit_words(rc)}"
+                     + (f"; its stderr ended: {err[-300:]}" if err else "; nothing on its stderr"))
+    tail = tail.strip()
+    lines.append(f"  the build's stderr ended: {tail[-1500:]}" if tail
+                 else "  nothing was written to the build's stderr")
+    return lines
+
+
+def build_with_retry(run, cmd: list[str], tap: Stages, errors: Tail, failures: Failures, zig_cache: str):
+    """run(cmd) (build_game.main); a stop in the compile stage is tried once more, with --compile-only (the translation
+    is kept and the objects' cache gives back what was made), after saying what is known of it. A stop that repeats
+    goes on as it is. Zig's cache with an object gone that its record still names (a Galaxy S25 Ultra, after some
+    seventy cuts of one build by the heat rule: a compile of the same C again fails with "cannot open
+    .../zig-cache/o/.../X.o") is emptied first: the cache only saves compiling the same C twice."""
+    try:
+        return run(cmd)
+    except SystemExit as e:
+        if e.code in (0, None) or tap.stage != "compile":
+            raise
+        message = e.code if isinstance(e.code, str) else f"stopped with code {e.code}"
+        for line in stop_report(tap.stage, message, errors.text, failures):
+            emit(line)
+        if "zig-cache" in errors.text and os.path.isdir(zig_cache):
+            print("Zig's cache names a file it no longer has: emptied")
+            shutil.rmtree(zig_cache, ignore_errors=True)
+        print("the compile goes on once more (the translation is kept, the objects made are in the cache)")
+        errors.text = ""
+        return run(cmd if "--compile-only" in cmd else cmd + ["--compile-only"])
 
 
 def whole_object(path: str) -> bool:
@@ -599,6 +684,7 @@ def main(argv=None) -> int:
 
     t0 = time.time()
     tap = Stages()
+    errors, failures = Tail(), Failures()   # (what the build wrote on stderr; the commands that ended badly)
     emit(f"@@pid {os.getpid()}")
     lib_id = build_game.code_library_id(True, False)
     emit(f"@@id {lib_id}")
@@ -701,21 +787,9 @@ def main(argv=None) -> int:
         tap.on_stage = on_stage
         sys.stdout = tap
         try:
-            errors = Tail()
             sys.stderr = errors
-            try:
-                build_game.main(cmd)
-            except SystemExit as e:
-                # Zig's cache with an object gone that its record still names: a compile of the same C again fails with
-                # "cannot open .../zig-cache/o/.../X.o" (a Galaxy S25 Ultra, after some seventy cuts of one build by the
-                # heat rule). The cache only saves compiling the same C twice: emptied, the compile goes on once more
-                zig_cache = os.path.join(args.work, "zig-cache")
-                if e.code in (0, None) or tap.stage != "compile" or "zig-cache" not in errors.text or \
-                        not os.path.isdir(zig_cache):
-                    raise
-                print("Zig's cache names a file it no longer has: emptied, the compile goes on")
-                shutil.rmtree(zig_cache, ignore_errors=True)
-                build_game.main(cmd if "--compile-only" in cmd else cmd + ["--compile-only"])
+            with failures.watching():
+                build_with_retry(build_game.main, cmd, tap, errors, failures, os.path.join(args.work, "zig-cache"))
         finally:
             progress.stop.set()
             sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
@@ -730,18 +804,26 @@ def main(argv=None) -> int:
         if e.code in (0, None):
             return 0
         message = str(e.code) if not isinstance(e.code, int) else f"stopped with code {e.code}"
+        for line in stop_report(tap.stage, message, errors.text, failures):
+            emit(line)
         emit(f"@@error {tap.stage} {' '.join(message.split())}")
         return 1
     except OSError as e:
         traceback.print_exc()
+        for line in stop_report(tap.stage, str(e), errors.text, failures):
+            emit(line)
         kind = "space" if e.errno == errno.ENOSPC else tap.stage
         emit(f"@@error {kind} {e}")
         return 1
     except MemoryError:
+        for line in stop_report(tap.stage, "out of memory", errors.text, failures):
+            emit(line)
         emit(f"@@error memory {tap.stage}")
         return 1
     except Exception as e:  # noqa: BLE001 (any other failure: the app shows it, the log has the traceback)
         traceback.print_exc()
+        for line in stop_report(tap.stage, f"{type(e).__name__}: {e}", errors.text, failures):
+            emit(line)
         emit(f"@@error {tap.stage} {type(e).__name__}: {' '.join(str(e).split())}")
         return 1
 
