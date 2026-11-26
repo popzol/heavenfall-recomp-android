@@ -182,12 +182,9 @@ public class UpdatePlanTest {
             assertNotNull("the new app always says how the update ended", note);
             assertEquals(note.basePermille, plan.permille(plan.indexOf(StepKind.APP_INSTALL), 0.0));
         }
-        UpdatePlan built = last.withBuildConfirmed();
         assertTrue("the later the install, the further the bar is when it comes",
-                built.resumeNote().basePermille > mod.resumeNote().basePermille
+                last.resumeNote().basePermille > mod.resumeNote().basePermille
                         && mod.resumeNote().basePermille > first.resumeNote().basePermille);
-        assertEquals("a build that may not run is not in the bar",
-                last.resumeNote().basePermille, mod.resumeNote().basePermille);
         UpdatePlan noApp = make(base());
         assertSame("a plan with no APK has no install to place", noApp, noApp.withInstall(UpdatePlan.InstallAt.LAST));
     }
@@ -435,6 +432,24 @@ public class UpdatePlanTest {
         assertEquals(needed.totalMs() - p.totalMs(), needed.remainingMs(3, 0.0));
         assertEquals("a library that is missing is a build from the start", 4,
                 make(libraryMissing()).stepCount());
+    }
+
+    /**
+     * Catches the bar left at its end for a whole build: the bar never goes back, so a build left out of it until it
+     * is known to run would join with the bar already full. The bar keeps the build's share from the start and moves
+     * through the build; a build that is not needed only moves it forward.
+     */
+    @Test
+    public void theBarKeepsRoomForABuildThatMayRun() {
+        UpdatePlan p = make(base());
+        assertTrue(p.steps().get(3).conditional);
+        UpdatePlan needed = p.withBuildConfirmed();
+        int atBuild = needed.permille(3, 0.0);
+        assertEquals("confirming the build does not move the bar", p.permille(3, 0.0), atBuild);
+        assertTrue("room is left for the build: " + atBuild, atBuild < 500);
+        assertTrue("the bar moves through the build", needed.permille(3, 0.5) > atBuild + 300);
+        assertTrue("a build left out only moves the bar forward",
+                p.withoutBuild().permille(3, 0.0) >= p.permille(2, 1.0));
     }
 
     private static UpdatePlan.Input libraryMissing() {
