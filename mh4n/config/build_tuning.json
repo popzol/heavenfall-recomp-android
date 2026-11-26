@@ -1,9 +1,9 @@
 {
  "format": 1,
  "compile": {
-  "job_mb": 190,
-  "base_mb": 118,
-  "mb_per_mib_of_c": 147,
+  "job_mb": 140,
+  "base_mb": 93,
+  "mb_per_mib_of_c": 182,
   "reserve_mb": 400,
   "poll_s": 2
  },
@@ -23,9 +23,9 @@
   "max_mb": 2048
  },
  "why": {
-  "compile.job_mb": "the most memory one compile may take: the recompiled C is cut into units that fit it (recomp/units.py; with the two below, units of about 500 KiB of C), and the jobs that run at once share what the device has free at this much each; the largest function, alone, takes about as much whatever the cut",
+  "compile.job_mb": "the most memory one compile may take: the recompiled C is cut into units that fit it (recomp/units.py; with the two below, units of about 260 KiB of C), and the jobs that run at once share what the device has free at this much each; a function larger than a unit is alone and takes as many jobs' room as it needs",
   "compile.base_mb": "a compile's memory besides its C: the compiler with the runtime's headers and Zig's driver (the fitted line's base), plus how far 99 % of the compiles measured went over the line (a unit's peak also follows its largest function)",
-  "compile.mb_per_mib_of_c": "what each MiB of a unit's C adds to its compile's peak (the fitted line over units of up to 600 KiB)",
+  "compile.mb_per_mib_of_c": "what each MiB of a unit's C adds to its compile's peak (the fitted line over units of up to 300 KiB)",
   "compile.reserve_mb": "memory left to the system and the app while compiling: the jobs never count on it",
   "compile.poll_s": "how often the free memory is read again while compiling (the jobs come down when it does)",
   "translation.peak_mb": "the translation's peak memory (one process: the analysis of the whole code, then its C), checked against the device's memory before it starts",
