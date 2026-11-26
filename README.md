@@ -15,6 +15,39 @@ never share it.
 
 ## The app
 
+Heavenfall is one app that sets the mod up, keeps it up to date and starts the game. Nothing of the game is in the app or
+in its releases: everything is made on your phone from your own copy of the game.
+
+**What the first run asks for.** A guide walks you through it, and you can leave it and come back:
+
+1. Let the app read files, and choose the folder on your phone where your game files are (or will be).
+2. Your own decrypted copy of the American game, Monster Hunter 4 Ultimate (a `.3ds`, `.cci` or `.cxi` file).
+3. Your own decrypted copy of the game's 1.3.0 update (a `.cia` file).
+4. Optional: your own decrypted copy of Monster Hunter XX, to add its gear looks and rare materials. You can skip it.
+
+Copy the files into the folder with a USB cable or a file manager, then tap Check again. Encrypted copies cannot be used:
+dump your own game decrypted from your 3DS (for example with GodMode9). The app checks each file and says what is wrong.
+
+**The button on the first screen** says what the app will do, and it does it all under one bar:
+
+- **Install:** downloads the mod's files, makes the mod from your dumps and builds the game's code.
+- **Update to a version:** the same for a newer app, a newer mod or both. The app asks to be allowed to install itself the
+  first time, and shows how to do it. Then it replaces itself and goes on.
+- **Build:** builds only the game's code again (it is missing, or it was made for another mod). More has Build again and
+  Reinstall too.
+- **Resume:** goes on where a job stopped. What was done is not done again.
+- **Play:** starts the game.
+
+**How long it takes.** Downloading the mod takes minutes. Building the game's code is the long part: it can take many
+minutes and, on a modest phone, hours. Keep the phone plugged in and leave the app in the background if you like: the
+job goes on, with a notification (Android 13 and later ask first whether to show it; the job runs the same without it),
+and the first screen shows the time left. If the phone restarts or the job is cancelled, Resume goes on from where it
+stopped. Building needs free space and memory: the app says so before it starts if the phone has too little.
+
+The game's code stays on your phone: never share it.
+
+### Name, id and releases
+
 - **Name and id:** "Heavenfall", application id `io.github.popzol.heavenfall`. It installs beside 4u-native as an app of
   its own: they don't share a save, a setting or an update.
 - **Test builds:** the debug build is "Heavenfall test", application id `io.github.popzol.heavenfall.test`, so a test
@@ -53,7 +86,8 @@ sh scripts/build_apk.sh     # libmain.so, the hook libraries, the on-phone build
 A release is made by GitHub Actions (`.github/workflows/build.yml`): a push or a pull request builds the debug APK and
 runs the tests; a tag `v<version>` (the version in `heavenfall/VERSION`) builds the release APK signed with the secrets
 `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`, and creates the release with
-`Heavenfall-android.apk` and `Heavenfall-android.apk.sha256`. Without the four secrets the tag build fails: it never signs
+`Heavenfall-android.apk`, `Heavenfall-android.apk.sha256` and `Heavenfall-android-release.json` (the release's files in
+the shape of GitHub's own answer, which the app reads when GitHub's API is out of reach). Without the four secrets the tag build fails: it never signs
 with the debug key.
 
 `app_native/` is the app (SDL3 and Dear ImGui), `android/` its Android side, `heavenfall/` what is this version's own

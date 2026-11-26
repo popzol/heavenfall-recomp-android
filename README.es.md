@@ -15,6 +15,41 @@ volcados del juego, y se queda ahí: no lo compartas nunca.
 
 ## La app
 
+Heavenfall es una sola app que prepara el mod, lo mantiene al día y arranca el juego. Nada del juego va en la app ni en
+sus versiones publicadas: todo se hace en tu teléfono a partir de tu propia copia del juego.
+
+**Qué pide la primera vez.** Una guía te acompaña, y puedes dejarla y volver:
+
+1. Dejar que la app lea archivos, y elegir la carpeta de tu teléfono donde están (o estarán) los archivos de tu juego.
+2. Tu propia copia sin cifrar del juego americano, Monster Hunter 4 Ultimate (un archivo `.3ds`, `.cci` o `.cxi`).
+3. Tu propia copia sin cifrar de la actualización 1.3.0 del juego (un archivo `.cia`).
+4. Opcional: tu propia copia sin cifrar de Monster Hunter XX, para sumar sus aspectos de equipo y materiales raros. Puedes
+   omitirla.
+
+Copia los archivos a la carpeta con un cable USB o un administrador de archivos, y toca Comprobar de nuevo. Las copias
+cifradas no sirven: vuelca tu propio juego sin cifrar desde tu 3DS (por ejemplo con GodMode9). La app revisa cada archivo
+y dice qué falla.
+
+**El botón de la primera pantalla** dice lo que la app va a hacer, y lo hace todo bajo una sola barra:
+
+- **Instalar:** descarga los archivos del mod, hace el mod con tus volcados y arma el código del juego.
+- **Actualizar a una versión:** lo mismo para una app nueva, un mod nuevo o ambos. La primera vez la app pide
+  permiso para instalarse a sí misma y te enseña cómo darlo. Después se reemplaza y sigue.
+- **Construir:** arma solo el código del juego otra vez (falta, o se hizo para otro mod). En Más también están Construir de nuevo
+  y Reinstalar el mod.
+- **Continuar:** sigue donde se detuvo un trabajo. Lo que ya se hizo no se repite.
+- **Jugar:** arranca el juego.
+
+**Cuánto tarda.** Descargar el mod tarda minutos. Armar el código del juego es lo largo: puede llevar muchos minutos y, en
+un teléfono modesto, horas. Deja el teléfono enchufado y, si quieres, la app en segundo plano: el trabajo sigue, con una
+notificación (Android 13 y posteriores preguntan antes si se muestra; el trabajo corre igual sin ella), y la primera
+pantalla muestra el tiempo que falta. Si el teléfono se reinicia o cancelas, Continuar sigue desde donde quedó. Armar
+necesita espacio libre y memoria: la app avisa antes de empezar si el teléfono tiene poco.
+
+El código del juego se queda en tu teléfono: no lo compartas nunca.
+
+### Nombre, identificador y versiones publicadas
+
 - **Nombre e identificador:** "Heavenfall", identificador de aplicación `io.github.popzol.heavenfall`. Se instala junto a
   4u-native como una app aparte: no comparten partida, ajustes ni actualizaciones.
 - **Versiones de prueba:** la de depuración se llama "Heavenfall test", con identificador
@@ -52,8 +87,9 @@ sale el APK de depuración, `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 Una versión publicada la hace GitHub Actions (`.github/workflows/build.yml`): un push o un pull request arma el APK de
 depuración y corre las pruebas; una etiqueta `v<versión>` (la de `heavenfall/VERSION`) arma el APK firmado con los secretos
-`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` y `KEY_PASSWORD`, y crea la versión con `Heavenfall-android.apk` y
-`Heavenfall-android.apk.sha256`. Sin los cuatro secretos la etiqueta falla: nunca firma con la clave de depuración.
+`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` y `KEY_PASSWORD`, y crea la versión con `Heavenfall-android.apk`,
+`Heavenfall-android.apk.sha256` y `Heavenfall-android-release.json` (los archivos de la versión con la forma de la
+respuesta de GitHub, que la app lee cuando no alcanza la API de GitHub). Sin los cuatro secretos la etiqueta falla: nunca firma con la clave de depuración.
 
 `app_native/` es la app (SDL3 y Dear ImGui), `android/` su parte de Android, `heavenfall/` lo que es propio de esta versión
 (su versión y su ícono: `python heavenfall/tools/make_icons.py` hace los íconos) y `mh4n/` el runtime y el recompilador
