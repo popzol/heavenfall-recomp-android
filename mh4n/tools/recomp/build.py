@@ -24,9 +24,9 @@ copy of the tools with new dates, as unpacking a new package makes, recompiles n
 from __future__ import annotations
 
 import argparse
-import concurrent.futures as cf
 import hashlib
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -34,6 +34,12 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+if os.path.dirname(HERE) not in sys.path:
+    sys.path.insert(0, os.path.dirname(HERE))
+
+from recomp import jobs as compile_jobs  # noqa: E402
+from recomp import objcache, units  # noqa: E402
+from recomp.emit import LOCALS_PREAMBLE  # noqa: E402
 RUNTIME = os.path.join(HERE, "runtime")
 HARNESS = os.path.join(HERE, "harness", "harness.c")
 DLL_GLUE = os.path.join(RUNTIME, "rc_dll.c")
@@ -163,14 +169,32 @@ def compile_one(cc: str, src: str, obj: str, flags: list[str]) -> tuple[str, flo
     return src, time.time() - t, (r.stderr if r.returncode else "")
 
 
+def load_tuning(path: str | None = None) -> dict:
+    """config/build_tuning.json (tools/build_tuning.py)."""
+    sys.path.insert(0, os.path.dirname(HERE))
+    import build_tuning
+    try:
+        return build_tuning.load(path)
+    except build_tuning.TuningError as e:
+        raise SystemExit(str(e)) from None
+
+
+INCLUDE = re.compile(rb'^\s*#\s*include\s+"([^"]+)"', re.M)
+
+
 def build(outdir: str, jobs: int, opt: str, defines: list[str], lib_name: str, extra_sources: list[str],
           cc: str = "clang", extra_flags: list[str] | None = None, runtime_header: str | None = None,
-          android: bool = False) -> str:
+          android: bool = False, tuning: dict | None = None, cache_dir: str | None = None,
+          jobs_by_memory: bool = False) -> str:
     """android: the arm64 library for Android, without the NDK; its soname follows the build
-    mode in `defines` (android_soname), and it is checked as Android's linker would see it."""
+    mode in `defines` (android_soname), and it is checked as Android's linker would see it.
+    `cache_dir`: the objects' cache (recomp/objcache.py): every object is taken from it when it has one made from the
+    same C, flags and compiler, and every object compiled goes into it. `jobs_by_memory`: `jobs` is a ceiling, the
+    number running follows the memory available (recomp/jobs.py; `tuning`, config/build_tuning.json)."""
     src_dir = os.path.join(outdir, "src")
     obj_dir = os.path.join(outdir, "obj")
     os.makedirs(obj_dir, exist_ok=True)
+    tuning = tuning or load_tuning()
     # funcs.h only gains or loses declarations; a file whose calls change is rewritten itself.
     # recomp.h is in every object: when its contents differ from those the objects were
     # compiled with (obj/recomp.h.sha1), everything is recompiled; its date is not looked at,
@@ -190,31 +214,55 @@ def build(outdir: str, jobs: int, opt: str, defines: list[str], lib_name: str, e
     # objects are named after everything that changes the code, so builds with other
     # settings (harness, code library, another compiler) never reuse each other's objects
     variant = hashlib.sha1(" ".join([os.path.basename(cc), opt, *defines, *(extra_flags or [])]).encode()).hexdigest()[:8]
-    todo, objs = [], []
-    for s in sources:
-        o = os.path.join(obj_dir, f"{os.path.basename(s)[:-2]}-{opt}-{variant}.o")
-        objs.append(o)
-        if header_changed or not os.path.exists(o) or os.path.getmtime(o) < os.path.getmtime(s):
-            todo.append((s, o))
-    if header_changed:
-        # the other variants' objects were compiled against the old header too
-        for name in os.listdir(obj_dir):
-            if name.endswith(".o") and os.path.join(obj_dir, name) not in objs:
-                os.remove(os.path.join(obj_dir, name))
+
+    def obj_of(s: str, folder: str = obj_dir) -> str:
+        return os.path.join(folder, f"{os.path.basename(s)[:-2]}-{opt}-{variant}.o")
+
     t0 = time.time()
-    errors = []
-    with cf.ThreadPoolExecutor(max_workers=jobs) as ex:
-        futs = [ex.submit(compile_one, cc, s, o, flags) for s, o in todo]
-        for i, fut in enumerate(cf.as_completed(futs), 1):
-            src, dt, err = fut.result()
-            if err:
-                errors.append((src, err))
-            if i % 20 == 0 or i == len(futs):
-                print(f"  compiled {i}/{len(futs)} ({time.time() - t0:.0f}s)", flush=True)
-    if errors:
-        for src, err in errors[:5]:
-            print(f"error in {src}:\n{err[-2000:]}", file=sys.stderr)
-        raise SystemExit(1)
+    todo, objs = [], []
+    cache = keys = None
+    if cache_dir:
+        # the objects' cache: an object made from the same file, includes, flags and compiler is never made again
+        c = tuning["cache"]
+        cache = objcache.ObjectCache(cache_dir, c["keep_free_mb"], c["max_mb"], tuning["space"]["cache_floor_mb"])
+        compiler = objcache.compiler_id(cc)
+        headers = objcache.headers_id(RUNTIME)
+        key_flags = [f.replace(src_dir, "<src>").replace(RUNTIME, "<runtime>") for f in flags]
+
+        def key_of(path: str) -> str:
+            with open(path, "rb") as fh:
+                data = fh.read()
+            includes = [open(os.path.join(src_dir, n.decode()), "rb").read() for n in INCLUDE.findall(data)
+                        if os.path.isfile(os.path.join(src_dir, n.decode()))]
+            return objcache.key(os.path.basename(path), data, includes, key_flags, compiler, headers)
+        keys = {}
+        for s in sources:
+            o = obj_of(s)
+            k = keys[s] = key_of(s)
+            parts = cache.get_parts(k)
+            if parts and all(cache.get(pk, obj_of(name + ".c", os.path.join(obj_dir, "parts"))) for name, pk in parts):
+                objs += [obj_of(name + ".c", os.path.join(obj_dir, "parts")) for name, _ in parts]
+                continue
+            objs.append(o)
+            if not cache.get(k, o):
+                todo.append((s, o))
+        bad = f" ({cache.dropped_bad} of its entries didn't match their sums: dropped)" if cache.dropped_bad else ""
+        print(f"objects' cache {cache_dir}: {cache.hits} objects from it, {len(todo)} to compile{bad}")
+    else:
+        for s in sources:
+            o = obj_of(s)
+            objs.append(o)
+            if header_changed or not os.path.exists(o) or os.path.getmtime(o) < os.path.getmtime(s):
+                todo.append((s, o))
+        if header_changed:
+            # the other variants' objects were compiled against the old header too
+            for name in os.listdir(obj_dir):
+                if name.endswith(".o") and os.path.join(obj_dir, name) not in objs:
+                    os.remove(os.path.join(obj_dir, name))
+    report = _compile(todo, cc, flags, jobs, tuning, jobs_by_memory, outdir, obj_of, cache,
+                      key_of if cache else None, is_zig(cc))
+    split = {unit_obj: [p.obj for p in pieces] for unit_obj, pieces in report.parts.items()}
+    objs = [p for o in objs for p in split.get(o, [o])]   # (a unit compiled one function per file: its parts)
     with open(stamp, "w") as fh:
         fh.write(header_hash + "\n")
     lib = os.path.join(outdir, lib_name)
@@ -235,7 +283,87 @@ def build(outdir: str, jobs: int, opt: str, defines: list[str], lib_name: str, e
         problems = android_library_problems(lib, soname)
         if problems:
             raise SystemExit(f"{lib} wouldn't load on Android: " + "; ".join(problems))
+    if cache is not None:
+        dropped, freed = cache.trim()
+        gone = (f" ({dropped} of its oldest objects dropped, {freed >> 20} MB, for the disk's free space)"
+                if dropped else "")
+        print(f"objects' cache: {cache.size() >> 20} MB{gone}")
     return lib
+
+
+def _compile(todo: list[tuple[str, str]], cc: str, flags: list[str], jobs: int, tuning: dict, jobs_by_memory: bool,
+             outdir: str, obj_of, cache, key_of, zig: bool) -> "compile_jobs.Report":
+    """The compiles of `todo` ((source, object) pairs): recomp/jobs.py's run_all, each object into the cache as it is
+    made (a run cut short keeps what it made). With the cache and Zig, each compile gets a folder of its own for Zig's
+    cache, emptied after it (Zig would keep a second copy of every object, which the cache already has)."""
+    sys.path.insert(0, os.path.dirname(HERE))
+    import build_tuning
+    c = tuning["compile"]
+    tasks = [compile_jobs.Task(os.path.basename(s)[:-2], s, o, os.path.getsize(s),
+                               build_tuning.compile_mb(tuning, os.path.getsize(s))) for s, o in todo]
+    rule = compile_jobs.MemoryRule(c["job_mb"], c["reserve_mb"], jobs) if jobs_by_memory else None
+    if rule is None and tasks:
+        print(f"compile jobs: {jobs}")
+    zig_dir = os.path.join(outdir, "obj", "zig")
+    parts_dir = os.path.join(outdir, "obj", "parts")
+    pieces_left: dict[str, list] = {}
+
+    def command(t):
+        if os.path.lexists(t.obj):     # (never written into: it may be a hard link of the cache's)
+            os.remove(t.obj)
+        os.makedirs(os.path.dirname(t.obj), exist_ok=True)
+        env = None
+        if cache is not None and zig:
+            d = os.path.join(zig_dir, t.name)
+            shutil.rmtree(d, ignore_errors=True)
+            os.makedirs(d)
+            env = dict(os.environ, ZIG_GLOBAL_CACHE_DIR=d, ZIG_LOCAL_CACHE_DIR=d)
+        return [cc, *flags, t.src, "-o", t.obj], env
+
+    def split(t):
+        with open(t.src, encoding="latin-1") as fh:
+            pieces = units.parts(fh.read(), LOCALS_PREAMBLE)
+        if len(pieces) < 2:
+            return []
+        folder = os.path.join(outdir, "parts", t.name)
+        os.makedirs(folder, exist_ok=True)
+        out = []
+        for name, text in pieces:
+            path = os.path.join(folder, name + ".c")
+            with open(path, "w", encoding="latin-1", newline="\n") as fh:
+                fh.write(text)
+            out.append(compile_jobs.Task(name, path, obj_of(path, parts_dir), len(text),
+                                         build_tuning.compile_mb(tuning, len(text)), parent=t.src))
+        pieces_left[t.src] = [p.src for p in out]
+        return out
+
+    def on_done(t, r):
+        if cache is not None and zig:
+            shutil.rmtree(os.path.join(zig_dir, t.name), ignore_errors=True)
+        if cache is None or r.rc != 0:
+            return
+        cache.put(key_of(t.src), t.obj)
+        if t.parent:
+            left = pieces_left[t.parent]
+            left.remove(t.src)
+            if not left:   # (the unit's every part made: the cache knows the unit by its parts)
+                with open(t.parent, encoding="latin-1") as fh:
+                    names = [n for n, _ in units.parts(fh.read(), LOCALS_PREAMBLE)]
+                folder = os.path.dirname(t.src)
+                cache.put_parts(key_of(t.parent), [(n, key_of(os.path.join(folder, n + ".c"))) for n in names])
+
+    try:
+        report = compile_jobs.run_all(tasks, command, jobs, rule, split, log=lambda m: print(m, flush=True),
+                                      poll_s=c["poll_s"], on_done=on_done)
+    except compile_jobs.CompileFailed as e:
+        if e.memory:
+            raise SystemExit(str(e)) from None
+        print(str(e), file=sys.stderr)
+        raise SystemExit(1) from None
+    if tasks:
+        for line in compile_jobs.summary(report):
+            print(line)
+    return report
 
 
 def native_defines(native: bool, deterministic: bool) -> list[str]:

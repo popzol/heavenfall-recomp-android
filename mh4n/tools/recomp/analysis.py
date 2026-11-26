@@ -6,6 +6,7 @@ from __future__ import annotations
 import dataclasses
 import re
 import struct
+import sys
 from dataclasses import dataclass, field
 
 from .arm import ArmTranslator
@@ -101,11 +102,23 @@ class Analyzer:
         self.img = img
         self.arm = ArmTranslator(img.read32)
         self.thumb = ThumbTranslator(img.read16, img.read32)
-        self._cache: dict[tuple[int, str, int], Insn] = {}
+        # every instruction decoded, kept for the whole analysis: an instruction reached again (by another function,
+        # or by the second analysis) is the same object, with whatever the analysis changed in it (a bad branch
+        # target made a trap...), so it is kept until the analysis is over (clear_cache)
+        # (by address alone, with the instruction's own int as the key, for the first mode an address is decoded in
+        # outside short-vector mode: nearly all of a game's millions; every other (address, mode, vec) by the three)
+        self._cache: dict[int, Insn] = {}
+        self._other: dict[tuple[int, str, int], Insn] = {}
+
+    def clear_cache(self) -> None:
+        """The decoded instructions no function holds go (once the analysis is over: the C is written from the
+        functions)."""
+        self._cache, self._other = {}, {}
 
     def decode(self, addr: int, mode: str, vec: int = 0) -> Insn:
-        key = (addr, mode, vec)
-        ins = self._cache.get(key)
+        ins = self._cache.get(addr) if not vec else None
+        if ins is None or ins.mode != mode:
+            ins = self._other.get((addr, mode, vec))
         if ins is None:
             if mode == "arm":
                 w = self.img.read32(addr)
@@ -118,7 +131,16 @@ class Analyzer:
                     ins = Insn(addr, 2, 0, "thumb", kind=TRAP, imm=2, trap_reason="outside text")
                 else:
                     ins = self.thumb.decode(addr)
-            self._cache[key] = ins
+            # most of the C statements are the same few thousand texts ("R(0) = R(1);"): one copy of each, in a list
+            # of the exact size (the same strings, so the same C)
+            if ins.body:
+                ins.body = [sys.intern(s) for s in ins.body][:]
+            if ins.pcexpr:
+                ins.pcexpr = sys.intern(ins.pcexpr)
+            if not vec and addr not in self._cache:
+                self._cache[ins.addr] = ins
+            else:
+                self._other[(addr, mode, vec)] = ins
         return ins
 
     # ── jump tables ──────────────────────────────────────────────────────
@@ -253,7 +275,7 @@ class Analyzer:
                     f.problems.append("instruction limit reached")
                     return f
                 ins = self.decode(a, mode, vec)
-                f.insns[a] = ins
+                f.insns[ins.addr] = ins     # (the instruction's own int as the key: `a`, an equal one, is not kept)
                 vec_at[a] = vec
                 succ: list[int] = []
                 cont = self._step(f, ins, entries, succ)

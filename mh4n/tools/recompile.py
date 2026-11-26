@@ -3,7 +3,8 @@
 
 usage: recompile.py [--exheader ...] [--code ...] [--functions config/functions.tsv]
                     [--extra build/export/missing2.txt] -o build/recomp
-Writes <out>/src/funcs.h, <out>/src/fNNN.c, <out>/src/table.c and <out>/report.txt.
+Writes <out>/src/funcs.h, the functions' C in units (recomp/units.py: <out>/src/fNNNNNNNN.c, one per 64 KiB of code, cut
+smaller where its C is larger than a unit may be), <out>/src/table.c and <out>/report.txt.
 """
 from __future__ import annotations
 
@@ -23,10 +24,9 @@ sys.path.insert(0, HERE)
 import build_function_table as bft  # noqa: E402
 import codebin2elf  # noqa: E402
 import exheader as exh  # noqa: E402
+from recomp import units  # noqa: E402
 from recomp.analysis import Analyzer, Image  # noqa: E402
 from recomp.emit import LOCALS_PREAMBLE, FunctionEmitter, fname  # noqa: E402
-
-FILE_SHIFT = 16
 
 
 def load_entries(functions_tsv: str, extra: list[str]) -> dict[int, str]:
@@ -99,12 +99,42 @@ def apply_tunables(funcs: dict, tunables: dict[int, tuple[int, str]]) -> tuple[l
     return [a for a in found if a in applied], problems
 
 
-def code_cover(funcs: dict) -> tuple[dict[str, set[int]], dict[str, set[int]]]:
+class AddressSet:
+    """A set of addresses (any ints) as one bit each, in pages of 64 KiB of address space: code_cover()'s millions of
+    halfwords in a few MB, where a set of ints takes hundreds."""
+    __slots__ = ("pages",)
+
+    def __init__(self, items=()):
+        self.pages: dict[int, bytearray] = {}
+        self.update(items)
+
+    def add(self, a: int) -> None:
+        page = self.pages.get(a >> 16)
+        if page is None:
+            page = self.pages[a >> 16] = bytearray(8192)
+        page[(a & 0xFFFF) >> 3] |= 1 << (a & 7)
+
+    def update(self, items) -> None:
+        for a in items:
+            self.add(a)
+
+    def __contains__(self, a: int) -> bool:
+        page = self.pages.get(a >> 16)
+        return page is not None and bool(page[(a & 0xFFFF) >> 3] >> (a & 7) & 1)
+
+    def __len__(self) -> int:
+        return sum(bin(b).count("1") for page in self.pages.values() for b in page)
+
+    def clear(self) -> None:
+        self.pages.clear()
+
+
+def code_cover(funcs: dict) -> tuple[dict[str, AddressSet], dict[str, AddressSet]]:
     """Halfword addresses covered by decoded instructions, and addresses that some
     instruction falls through into, per instruction set."""
     em = FunctionEmitter({})
-    cover = {"arm": set(), "thumb": set()}
-    fall_into = {"arm": set(), "thumb": set()}
+    cover = {"arm": AddressSet(), "thumb": AddressSet()}
+    fall_into = {"arm": AddressSet(), "thumb": AddressSet()}
     for f in funcs.values():
         cv, fi = cover[f.mode], fall_into[f.mode]
         for a, ins in f.insns.items():
@@ -236,10 +266,14 @@ def code_size(header: exh.ExHeader, code: bytes) -> int:
 def recompile(img: Image, entries: dict[int, str], out: str, log=print,
               data_segments: list[tuple[int, int]] | None = None, title_id: int = 0,
               hooks: dict[int, str] | None = None,
-              tunables: dict[int, tuple[int, str]] | None = None) -> dict:
+              tunables: dict[int, tuple[int, str]] | None = None,
+              unit_bytes: int | None = None, keep_functions: bool = True) -> dict:
     """`hooks`: function entries native code may wrap or replace (see RHookFn in recomp.h);
     each must also be an entry point. `tunables`: instructions whose immediate (the given
-    original value) the host can change at run time (rc_tunables in recomp.h)."""
+    original value) the host can change at run time (rc_tunables in recomp.h).
+    `unit_bytes`: the most C a file gets (recomp/units.py; None: one file per 64 KiB of code).
+    `keep_functions` False: each function is let go once its C is written (the result has no "funcs"), so a whole
+    game's analysis is not held through the writing; the C is the same."""
     t0 = time.time()
     hooks = hooks or {}
     an = Analyzer(img)
@@ -257,10 +291,13 @@ def recompile(img: Image, entries: dict[int, str], out: str, log=print,
         cover, fall_into = code_cover(first)
         known = {a: f.mode for a, f in first.items()}
         literals = {i.literal for f in first.values() for i in f.insns.values() if i.literal is not None}
+        first.clear()   # (its instructions stay in the decoder's cache, which the second analysis reads)
         extra = data_pointer_entries(img, an, data_segments, known, cover, fall_into, literals)
+        cover = fall_into = known = literals = None
         entries = {**entries, **extra}
         log(f"  {len(extra)} entry points found through data pointers")
     funcs = an.analyze_all(entries, progress=lambda n, m: log(f"  analysed {n}/{m}"))
+    an.clear_cache()
     t1 = time.time()
     known = {a: f.mode for a, f in funcs.items()}
     tunable_addrs, tunable_problems = apply_tunables(funcs, tunables or {})
@@ -280,27 +317,35 @@ def recompile(img: Image, entries: dict[int, str], out: str, log=print,
     order = sorted(funcs)
     write_if_changed(os.path.join(src, "funcs.h"),
                      '#include "recomp.h"\n' + "".join(f"void {fname(a)}(RCtx *ctx);\n" for a in order))
+    names = {fname(a) for a in order}
     stats = collections.Counter()
     problems = []
     files = []
-    # one file per 64 KiB of code, so adding or changing functions only rebuilds their file
+    # a 64 KiB of code at a time: its functions' C, then its units (recomp/units.py), so that adding or changing
+    # functions only rebuilds their unit
     buckets = collections.defaultdict(list)
     for a in order:
-        buckets[a >> FILE_SHIFT].append(a)
-    for bucket, addrs in sorted(buckets.items()):
-        parts = ['#include "funcs.h"\n' + LOCALS_PREAMBLE]
+        buckets[a >> units.BUCKET_SHIFT].append(a)
+    for _, addrs in sorted(buckets.items()):
+        texts = {}
         for a in addrs:
             f = funcs[a]
-            parts.append("\n".join(em.function(f)))
+            texts[a] = "\n".join(em.function(f))
             stats["insns"] += len(f.insns)
             stats["traps"] += sum(1 for i in f.insns.values() if i.kind == "trap")
             stats["jump_tables"] += len(f.jtabs)
             stats["interpreted"] += (sum(not img.in_text(f.insns[t].target) for t in f.tails) +
                                      sum(not img.in_text(t) for ts in f.jtabs.values() for t in ts))
+            stats["extra_code_functions"] += img.in_extra(a)
+            stats["pack_functions"] += any(s <= a < s + len(d) for s, d in img.regions)
+            stats["open_jump_tables"] += len(f.open_jtabs)
             problems += [f"{fname(a)}: {p}" for p in f.problems]
-        path = os.path.join(src, f"f{bucket << FILE_SHIFT:08x}.c")
-        write_if_changed(path, "\n".join(parts) + "\n")
-        files.append(path)
+            if not keep_functions:
+                funcs[a] = None
+        for unit in units.plan([(a, len(t)) for a, t in texts.items()], unit_bytes):
+            path = os.path.join(src, unit.name + ".c")
+            write_if_changed(path, units.text([texts[a] for a in unit.addrs], LOCALS_PREAMBLE, names))
+            files.append(path)
     problems += [f"hook 0x{a:08x} ({hooks[a]}): not a function" for a in sorted(set(hooks) - set(hook_addrs))]
     problems += tunable_problems
     keep = {os.path.basename(p) for p in files} | {"funcs.h", "table.c"}
@@ -308,8 +353,8 @@ def recompile(img: Image, entries: dict[int, str], out: str, log=print,
         if old not in keep:
             os.remove(os.path.join(src, old))
     table = ['#include "funcs.h"', "", "const RFuncEntry rc_func_table[] = {"]
-    table += [f"    {{0x{a:08x}u, {1 if funcs[a].mode == 'thumb' else 0}, {fname(a)}}}," for a in order]
-    table += ["};", f"const u32 rc_func_count = {len(funcs)};",
+    table += [f"    {{0x{a:08x}u, {1 if known[a] == 'thumb' else 0}, {fname(a)}}}," for a in order]
+    table += ["};", f"const u32 rc_func_count = {len(order)};",
               "/* the code this was recompiled from; runtimes check it before running */",
               f"const u32 rc_text_base = 0x{img.base:08x}u;",
               f"const u32 rc_text_size = 0x{img.text_size:08x}u;",
@@ -328,12 +373,12 @@ def recompile(img: Image, entries: dict[int, str], out: str, log=print,
     write_if_changed(os.path.join(src, "table.c"), "\n".join(table))
     t2 = time.time()
     report = {
-        "functions": len(funcs), "discovered": an.discovered, "from_data_pointers": len(extra), "instructions": stats["insns"],
+        "functions": len(order), "discovered": an.discovered, "from_data_pointers": len(extra), "instructions": stats["insns"],
         "trap_instructions": stats["traps"], "jump_tables": stats["jump_tables"],
         # a code mod's: the functions in its code past the text, and its branches into code left to the interpreter
-        "extra_code_functions": sum(img.in_extra(a) for a in funcs), "interpreted_branches": stats["interpreted"],
-        "pack_functions": sum(any(s <= a < s + len(d) for s, d in img.regions) for a in funcs),
-        "open_jump_tables": sum(len(f.open_jtabs) for f in funcs.values()),
+        "extra_code_functions": stats["extra_code_functions"], "interpreted_branches": stats["interpreted"],
+        "pack_functions": stats["pack_functions"],
+        "open_jump_tables": stats["open_jump_tables"],
         "problems": len(problems), "c_files": len(files) + 1, "hook_points": len(hook_addrs),
         "tunables": len(tunable_addrs),
         "analysis_s": round(t1 - t0, 1), "emit_s": round(t2 - t1, 1),
@@ -342,7 +387,10 @@ def recompile(img: Image, entries: dict[int, str], out: str, log=print,
         for k, v in report.items():
             fh.write(f"{k}: {v}\n")
         fh.write("\n".join(problems) + "\n")
-    return {"report": report, "funcs": funcs, "files": files, "problems": problems}
+    result = {"report": report, "files": files, "problems": problems}
+    if keep_functions:
+        result["funcs"] = funcs
+    return result
 
 
 def main(argv=None) -> int:

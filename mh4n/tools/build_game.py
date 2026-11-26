@@ -67,6 +67,7 @@ sys.path.insert(0, HERE)
 
 import code_mods  # noqa: E402
 import build_function_table  # noqa: E402
+import build_tuning  # noqa: E402
 import codebin2elf  # noqa: E402
 import exheader as exh  # noqa: E402
 import extract_ncch  # noqa: E402
@@ -77,12 +78,14 @@ import recompile  # noqa: E402
 import version_map  # noqa: E402
 from recomp import build as rbuild  # noqa: E402
 from recomp.analysis import Image  # noqa: E402
+from recomp.jobs import own_peak_mb  # noqa: E402
 
 # What a code library's code depends on (code_library_id): the translator, the runtime it is compiled with and the tables of
 # config/ it is translated with (functions, hook points, tunables). A change to any of them makes a library of another kind,
 # whatever the game: every player makes theirs again, and the native app (GameFolderActivity) says so before it starts.
 ID_FILES = ["tools/recompile.py", "tools/build_function_table.py", "tools/recomp/analysis.py", "tools/recomp/arm.py",
             "tools/recomp/build.py", "tools/recomp/emit.py", "tools/recomp/insn.py", "tools/recomp/thumb.py",
+            "tools/recomp/units.py",
             "tools/recomp/runtime/recomp.h", "tools/recomp/runtime/rc_dll.c", "tools/recomp/runtime/android/fenv.h",
             "tools/recomp/runtime/android/math.h", "tools/recomp/runtime/android/string.h", "config/functions.tsv",
             "tools/pica_native.py", "tools/romfs_image.py", "tools/recomp/runtime/pica_native.h",
@@ -441,7 +444,9 @@ def compile_library(args, out: str, program_id: int, modes: list[str]) -> tuple[
           f"({args.jobs} jobs; -O1 takes a while)")
     lib = rbuild.build(out, args.jobs, args.opt, modes or ["RC_PAGED"],
                        os.path.join("android", name) if args.android else os.path.join("pc", name) if args.pc else name,
-                       [rbuild.DLL_GLUE], cc=cc, extra_flags=["-fvisibility=hidden"], android=args.android)
+                       [rbuild.DLL_GLUE], cc=cc, extra_flags=["-fvisibility=hidden"], android=args.android,
+                       tuning=build_tuning.load(args.tuning), cache_dir=args.object_cache,
+                       jobs_by_memory=args.jobs_by_memory)
     print(f"code library: {lib}")
     if (args.android or args.pc) and args.native:  # (the native app checks it: GameFolderActivity, MH4U.exe)
         with open(id_path(lib), "w", encoding="ascii") as f:
@@ -504,7 +509,20 @@ def main(argv=None) -> int:
     # translation an earlier run made from the same dump, code mods and tools, which phone_build.py checks; only the
     # compile and the link are done, from the objects that are still missing)
     ap.add_argument("--compile-only", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--tuning", default=build_tuning.PATH,
+                    help="the build's numbers: the memory of a compile job, the units' size, the space (config/"
+                         "build_tuning.json)")
+    ap.add_argument("--object-cache", metavar="DIR",
+                    help="keep every compiled object in DIR, found again by its C, flags and compiler: a later build "
+                         "(another mod version too) compiles only the units that changed")
+    ap.add_argument("--jobs-by-memory", action="store_true",
+                    help="-j is a ceiling: as many compiles at once as the memory available holds (config/"
+                         "build_tuning.json's compile job), fewer while the build runs if it drops")
     args = ap.parse_args(argv)
+    try:
+        tuning = build_tuning.load(args.tuning)
+    except build_tuning.TuningError as e:
+        raise SystemExit(str(e)) from None
     if args.pc and args.android:
         ap.error("--pc and --android are two different apps' libraries: one at a time")
     if args.print_id:
@@ -690,8 +708,12 @@ def main(argv=None) -> int:
                       "work with it")
     segs = [(header.ro.address, header.ro.size), (header.data.address, header.data.size)]
     res = recompile.recompile(img, entries, out, data_segments=segs, title_id=program_id,
-                              hooks=hooks, tunables=tunables, log=lambda m: print(m, flush=True))
+                              hooks=hooks, tunables=tunables, log=lambda m: print(m, flush=True),
+                              unit_bytes=build_tuning.unit_bytes(tuning), keep_functions=False)
     print(f"{res['report']['functions']} functions, {res['report']['hook_points']} hook points")
+    peak = own_peak_mb()   # (the translation's: the compiles are processes of their own; config/build_tuning.json)
+    if peak:
+        print(f"translation: peak memory {peak:.0f} MB (translation.peak_mb {tuning['translation']['peak_mb']})")
     for p in res["problems"]:
         print(f"  warning: {p}")
     # what the runtime is told about the game version (beside the recompiled code, which recompile() keeps clean)
