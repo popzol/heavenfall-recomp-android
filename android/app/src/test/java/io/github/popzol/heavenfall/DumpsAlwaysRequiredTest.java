@@ -40,7 +40,7 @@ public class DumpsAlwaysRequiredTest {
     /** Every state of the phone: a missing or wrong update dump never leaves Build, Reinstall, Install or Play offered. */
     @Test
     public void noScreenStartsWhatReadsADumpThatIsNotThere() {
-        HomeModel model = new HomeModel(Support.tuning());
+        HomeModel model = Support.model();
         int states = 0;
         for (Storage storage : Storage.values())
             for (Source game : Source.values())

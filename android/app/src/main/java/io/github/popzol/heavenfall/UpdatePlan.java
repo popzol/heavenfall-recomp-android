@@ -307,12 +307,13 @@ public final class UpdatePlan {
 
     /**
      * Whether a job was left half-done: past its downloads, a resume note the app can go on with (the app replaced
-     * itself) or a staging folder (the mod was being made). A ".part" download, a failed download or a declined APK
-     * install is not half-done: nothing installed was touched, and the next Update goes on from the bytes there. (An
-     * interrupted build is not here either: it shows as a library that is not good.)
+     * itself), a staging folder (the mod was being made) or a build cut short (cancelled, failed or stopped: the
+     * builder's work folder, which Resume goes on from, at the unit it reached, without translating again). A ".part"
+     * download, a failed download or a declined APK install is not half-done: nothing installed was touched, and the
+     * next Update goes on from the bytes there.
      */
-    public static HomeModel.Job jobLeft(Resume note, String runningApp, boolean stagingFolder) {
+    public static HomeModel.Job jobLeft(Resume note, String runningApp, boolean stagingFolder, boolean buildCutShort) {
         boolean go = note != null && note.verdict(runningApp) == Resume.Verdict.GO;
-        return go || stagingFolder ? HomeModel.Job.HALF_DONE : HomeModel.Job.NONE;
+        return go || stagingFolder || buildCutShort ? HomeModel.Job.HALF_DONE : HomeModel.Job.NONE;
     }
 }

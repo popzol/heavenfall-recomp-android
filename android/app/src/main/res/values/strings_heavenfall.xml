@@ -80,7 +80,8 @@
     <string name="hf_advice_space">Free some space on the phone and try again.</string>
     <string name="hf_block_battery">The battery is at %1$s%%</string>
     <string name="hf_advice_battery">Plug the phone in before you go on: this takes a long time.</string>
-    <string name="hf_block_memory">Only %1$s MB of memory is free</string>
+    <string name="hf_block_memory_never">This phone has %1$s MB of memory; building the game\'s code needs about %2$s MB</string>
+    <string name="hf_advice_memory_never">The game\'s code cannot be built on this phone.</string>
     <string name="hf_advice_memory">Close other apps and try again.</string>
 
     <!-- A release that was not taken -->
@@ -141,6 +142,11 @@
     <string name="hf_fail_apply_failed">The mod could not be made</string>
     <string name="hf_fail_build_space">There is not enough free space to build the game\'s code</string>
     <string name="hf_fail_build_memory">The phone ran out of memory while building the game\'s code</string>
+    <string name="hf_fail_build_space_mb">Building the game\'s code needs %1$s MB more free space</string>
+    <string name="hf_fail_build_memory_never">This phone does not have enough memory to build the game\'s code</string>
+    <string name="hf_fail_build_memory_never_mb">This phone has %1$s MB of memory; building the game\'s code needs about %2$s MB</string>
+    <string name="hf_fail_build_compile_memory">The phone ran out of memory compiling a part of the game\'s code</string>
+    <string name="hf_advice_compile_memory">Close other apps or restart the phone, then try again: it goes on from where it stopped.</string>
     <string name="hf_fail_build_tools">The tools to build the game\'s code could not be downloaded</string>
     <string name="hf_fail_build_game_files">Your game files are not the ones the build needs</string>
     <string name="hf_fail_build_compile">The tool failed while building the game\'s code</string>

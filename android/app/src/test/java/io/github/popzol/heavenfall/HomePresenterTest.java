@@ -18,7 +18,7 @@ import io.github.popzol.heavenfall.HomePresenter.Command;
 
 public class HomePresenterTest {
     private static final long GB = 1L << 30;
-    private final HomeModel model = new HomeModel(Support.tuning());
+    private final HomeModel model = Support.model();
 
     private static Installed installed(String version, boolean xx) {
         return Support.installed("beta", version, "s.hfpatch", sha('a'), xx, sha('b'), "tools-7", sha('b'));
@@ -35,7 +35,7 @@ public class HomePresenterTest {
         in.latestApp = "v1.0.0";
         in.latestMod = "v0.2.3";
         in.freeBytes = 50 * GB;
-        in.availableMemoryMb = 6000;
+        in.memoryInAllMb = 6000;
         in.batteryPercent = 80;
         return in;
     }

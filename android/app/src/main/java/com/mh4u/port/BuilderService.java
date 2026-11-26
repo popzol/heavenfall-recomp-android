@@ -347,6 +347,9 @@ public class BuilderService extends Service {
                 job.lastLine = System.currentTimeMillis();
                 say(log, line);
                 if (line.startsWith("@@")) at(line.substring(2));
+                // BEGIN heavenfall: the objects' cache's line, for the launcher's time left
+                else HeavenfallBridge.builderLine(line);
+                // END heavenfall
             }
         }
         int code = process.waitFor();
@@ -455,29 +458,15 @@ public class BuilderService extends Service {
         changed();
     }
 
-    /**
-     * How many compilers at once: every core, but no more than the free memory holds (a compiler takes up to about
-     * 300 MB on the largest files; the translator's 1.4 GB is given back before they start: phone_build.py), and half
-     * of the last run's when that one stopped while compiling (most likely Android closed a compiler for memory).
-     */
+    // BEGIN heavenfall: --jobs is the ceiling, the cores (phone_build.py's compiles follow the memory available all
+    // along the compile, and a compile Android stops is compiled again alone: no memory rule of the app's here)
     int jobs() {
-        int cores = Runtime.getRuntime().availableProcessors();
-        ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
-        ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
-        if (am != null) am.getMemoryInfo(mi);
-        long free = mi.availMem > 0 ? mi.availMem >> 20 : 1024;
-        int jobs = (int) Math.max(1, Math.min(cores, (free - 300) / 300));
-        String last = BuilderTools.readText(new File(BuilderTools.root(this), "last_failure.txt"));
-        if (last.startsWith("compile ")) {
-            try {
-                jobs = Math.max(1, Math.min(jobs, Integer.parseInt(last.substring(8).trim()) / 2));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        Log.i(TAG, "builder: " + jobs + " compilers (" + cores + " cores, " + free + " MB free)");
-        lastJobs = jobs;
-        return jobs;
+        int cores = Math.max(1, Runtime.getRuntime().availableProcessors());
+        Log.i(TAG, "builder: at most " + cores + " compilers (the cores; the build follows the memory available)");
+        lastJobs = cores;
+        return cores;
     }
+    // END heavenfall
 
     private int lastJobs;
 

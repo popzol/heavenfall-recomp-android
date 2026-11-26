@@ -63,7 +63,7 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
     }
 
     private HomeModel model() {
-        return new HomeModel(Config.tuning(this));
+        return new HomeModel(Config.tuning(this), Config.buildNeeds(this));
     }
 
     private void build() {

@@ -23,11 +23,12 @@ public final class JobState {
 
     /**
      * Whether a job was left half-done: a saved request the app can go on with and, past the downloads, a resume note
-     * the running app can go on with (the app replaced itself) or a staging folder (the mod was being made). A ".part"
-     * download alone is not: the installed mod was not touched, and the next job goes on with it. A note the install
-     * never made good (the running app is older than its target) is forgotten here.
+     * the running app can go on with (the app replaced itself), a staging folder (the mod was being made) or, with
+     * {@code buildCutShort}, the builder's work folder of a build that did not end (see {@link UpdatePlan#jobLeft}). A
+     * ".part" download alone is not: the installed mod was not touched, and the next job goes on with it. A note the
+     * install never made good (the running app is older than its target) is forgotten here.
      */
-    public static HomeModel.Job left(JobPaths.Places places, File gameFolder, String runningApp) {
+    public static HomeModel.Job left(JobPaths.Places places, File gameFolder, String runningApp, boolean buildCutShort) {
         UpdateRequest request = savedRequest(places, gameFolder);
         if (request == null) return HomeModel.Job.NONE;
         Resume note = note(places);
@@ -35,7 +36,7 @@ public final class JobState {
             UpdateRunner.delete(places.resumeFile);
             note = null;
         }
-        return UpdatePlan.jobLeft(note, runningApp, hasFiles(places.staging));
+        return UpdatePlan.jobLeft(note, runningApp, hasFiles(places.staging), buildCutShort);
     }
 
     /**

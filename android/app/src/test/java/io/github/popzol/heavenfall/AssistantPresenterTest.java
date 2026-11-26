@@ -16,7 +16,7 @@ import io.github.popzol.heavenfall.AssistantPresenter.Do;
 import io.github.popzol.heavenfall.AssistantPresenter.Kind;
 
 public class AssistantPresenterTest {
-    private final HomeModel model = new HomeModel(Support.tuning());
+    private final HomeModel model = Support.model();
 
     private AssistantPresenter.Screen screen(Storage storage, Source game, Source update, Source xx, boolean installed) {
         HomeModel.Input in = new HomeModel.Input();

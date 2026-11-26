@@ -28,7 +28,7 @@ public class AutoPlayTest {
         in.appVersion = "1.0.0";
         in.latestApp = "v1.0.0";
         in.latestMod = "v0.2.3";
-        return new HomeModel(Support.tuning()).compute(in);
+        return Support.model().compute(in);
     }
 
     @Test

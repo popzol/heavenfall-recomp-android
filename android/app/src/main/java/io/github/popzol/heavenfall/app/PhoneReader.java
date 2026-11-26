@@ -71,7 +71,9 @@ public final class PhoneReader {
         f.library = PhoneLibraryBuilder.stateOf(c);
         PhoneConditions conditions = new PhoneConditions(c);
         f.freeBytes = conditions.freeBytes();
-        f.availableMemoryMb = conditions.availableMemoryMb();
+        f.memoryInAllMb = conditions.memoryInAllMb();
+        f.builderWorkBytes = HeavenfallBridge.workBytes(c);
+        f.objectCacheBytes = HeavenfallBridge.cacheBytes(c);
         f.batteryPercent = conditions.batteryPercent();
         f.charging = conditions.charging();
         f.job = PhoneFacts.effectiveJob(UpdateService.running() ? HomeModel.Job.RUNNING : HomeModel.Job.NONE,

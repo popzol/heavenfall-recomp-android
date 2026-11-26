@@ -22,7 +22,9 @@ public final class PhoneFacts {
     /** The id of the tools this app builds with. */
     public String wantedId = "";
     public long freeBytes = -1;
-    public long availableMemoryMb = -1;
+    public long memoryInAllMb = -1;
+    public long builderWorkBytes;
+    public long objectCacheBytes;
     public int batteryPercent = -1;
     public boolean charging;
     public HomeModel.Job job = HomeModel.Job.NONE;
@@ -62,7 +64,9 @@ public final class PhoneFacts {
         in.libraryId = library.id;
         in.appVersion = appVersion;
         in.freeBytes = freeBytes;
-        in.availableMemoryMb = availableMemoryMb;
+        in.memoryInAllMb = memoryInAllMb;
+        in.builderWorkBytes = builderWorkBytes;
+        in.objectCacheBytes = objectCacheBytes;
         in.batteryPercent = batteryPercent;
         in.charging = charging;
         in.job = job;

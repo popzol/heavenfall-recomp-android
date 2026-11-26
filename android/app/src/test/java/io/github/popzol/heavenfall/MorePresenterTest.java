@@ -17,7 +17,7 @@ import org.junit.Test;
 import io.github.popzol.heavenfall.MorePresenter.Command;
 
 public class MorePresenterTest {
-    private final HomeModel model = new HomeModel(Support.tuning());
+    private final HomeModel model = Support.model();
 
     private HomeModel.Input input() {
         HomeModel.Input in = new HomeModel.Input();

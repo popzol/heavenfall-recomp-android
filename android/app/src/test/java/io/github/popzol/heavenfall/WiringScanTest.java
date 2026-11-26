@@ -128,4 +128,27 @@ public class WiringScanTest {
         String game = read(JAVA + "com/mh4u/port/GameActivity.java");
         assertTrue(game.contains("HeavenfallBridge.buildInLauncher()"));
     }
+
+    @Test
+    public void theBuildFollowsTheMemoryAndKeepsItsCacheInThePrivateStorage() throws Exception {
+        // Catches the app's own memory rule passed as --jobs (the build follows the memory available all along the
+        // compile; --jobs is the ceiling: the cores), the cache's line never reaching the time left, and an objects'
+        // cache "start over" deletes or that lives outside the app's private files.
+        String service = read(JAVA + "com/mh4u/port/BuilderService.java");
+        assertTrue(service.contains("int cores = Math.max(1, Runtime.getRuntime().availableProcessors());"));
+        assertFalse(service.contains("(free - 300) / 300"));
+        assertTrue(service.contains("else HeavenfallBridge.builderLine(line);"));
+        int start = service.indexOf("static void startOver(");
+        String startOver = service.substring(start, service.indexOf("\n    }\n", start));
+        assertFalse("start over keeps the objects' cache", startOver.contains("object-cache"));
+        assertTrue(startOver.contains("deleteAside(work(c));"));
+        String tools = read(JAVA + "com/mh4u/port/BuilderTools.java");
+        assertTrue(tools.contains("static File root(Context c) { return new File(c.getFilesDir(), \"builder\"); }"));
+        String bridge = read(JAVA + "com/mh4u/port/HeavenfallBridge.java");
+        assertTrue(bridge.contains("return new File(BuilderTools.root(c), \"object-cache\");"));
+        String phoneBuild = read("mh4n/tools/android/phone_build.py");
+        assertTrue("the build's default cache is beside its work folder",
+                phoneBuild.contains("os.path.join(os.path.dirname(os.path.abspath(args.work)), CACHE)"));
+        assertTrue(phoneBuild.contains("CACHE = \"object-cache\""));
+    }
 }

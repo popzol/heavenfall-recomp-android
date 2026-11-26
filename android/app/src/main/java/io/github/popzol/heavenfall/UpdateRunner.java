@@ -23,13 +23,11 @@ public final class UpdateRunner {
         void line(String line);
     }
 
-    /** The phone's state a build needs, read when the build step starts: -1 (and not charging) when not known. */
+    /**
+     * The phone's state the build step checks when it starts: the battery (-1, and not charging, when not known). The
+     * space and the memory a build needs are the build's own checks, its first ones (named stops: BuildFailures).
+     */
     public interface Conditions {
-        /** Free bytes where the build works. */
-        long freeBytes();
-
-        long availableMemoryMb();
-
         int batteryPercent();
 
         boolean charging();
@@ -37,16 +35,6 @@ public final class UpdateRunner {
 
     /** Nothing known: no build is stopped by the phone's state. */
     public static final Conditions UNKNOWN_CONDITIONS = new Conditions() {
-        @Override
-        public long freeBytes() {
-            return -1;
-        }
-
-        @Override
-        public long availableMemoryMb() {
-            return -1;
-        }
-
         @Override
         public int batteryPercent() {
             return -1;
@@ -360,19 +348,14 @@ public final class UpdateRunner {
         return code;
     }
 
-    /** Space, battery (unless charging) and memory against the tuning, when the build step starts. */
+    /**
+     * The battery (unless charging) against the tuning, when the build step starts. The space and the memory are the
+     * build's own first checks, against its own numbers (config/build_tuning.json), with the room its own files give.
+     */
     static void conditionsChecked(Conditions c, Tuning tuning) throws UpdateException {
-        long free = c.freeBytes();
-        if (free >= 0 && free < tuning.minFreeBuildBytes()) {
-            throw new UpdateException(UpdateFailure.BUILD_SPACE, "free " + free);
-        }
         int battery = c.batteryPercent();
         if (battery >= 0 && !c.charging() && battery < tuning.minBatteryPercent) {
             throw new UpdateException(UpdateFailure.BUILD_BATTERY, "battery " + battery);
-        }
-        long memory = c.availableMemoryMb();
-        if (memory >= 0 && memory < tuning.minAvailableMemoryMb) {
-            throw new UpdateException(UpdateFailure.BUILD_MEMORY, "memory " + memory);
         }
     }
 

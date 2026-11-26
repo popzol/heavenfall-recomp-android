@@ -1,6 +1,6 @@
 package io.github.popzol.heavenfall;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -22,46 +22,38 @@ public class TuningTest {
         }
     }
 
-    /** The tuning file's fields all reach the model, and the build needs more room than a download. */
+    /** The tuning file's fields all reach the model. */
     @Test
     public void sampleReads() {
         Tuning t = Support.tuning();
-        assertTrue(t.minFreeBuildMb >= t.minFreeDownloadMb);
-        assertEquals(t.minFreeBuildMb * 1024 * 1024, t.minFreeBuildBytes());
+        assertTrue(t.minFreeDownloadMb > 0);
         assertTrue(t.minBatteryPercent > 0 && t.minBatteryPercent < 100);
         assertTrue(t.downloadKibPerSecond > 0 && t.applyKibPerSecond > 0 && t.buildSeconds > 0);
+        assertTrue(t.buildUnits > 0 && t.buildUnitMs > 0);
     }
 
-    /** More memory never means fewer jobs, the lowest tier is one job, and a tier starts exactly at its memory. */
+    /**
+     * Catches a second source for what a build needs (the space, the memory, the compile jobs): those are the build's
+     * own numbers (BuildNeeds) and the build's own rule, never the launcher's guesses.
+     */
     @Test
-    public void jobsByMemory() {
-        Tuning t = Support.tuning();
-        assertEquals(1, t.compileJobs(0));
-        assertEquals(1, t.compileJobs(1199));
-        assertEquals(2, t.compileJobs(1200));
-        assertEquals(3, t.compileJobs(2500));
-        assertEquals(6, t.compileJobs(100000));
-        int last = 0;
-        for (int mb = 0; mb < 8000; mb += 50) {
-            int jobs = t.compileJobs(mb);
-            assertTrue(jobs >= last);
-            last = jobs;
+    public void theBuildsNeedsAreNotHere() {
+        String json = Support.tuningJson();
+        for (String key : new String[] {"min_free_build_mb", "min_available_memory_mb", "compile_jobs_by_memory"}) {
+            assertFalse(key, json.contains(key));
         }
     }
 
-    /** A tuning that would hide a mistake (an unordered tier, a zero speed, text for a number) is refused. */
+    /** A tuning that would hide a mistake (a zero speed, text for a number, a number out of range) is refused. */
     @Test
     public void brokenTuning() {
         refused("{}");
         refused("[]");
-        refused(with("\"format\": 1", "\"format\": 3"));
+        refused(with("\"format\": 2", "\"format\": 3"));
         refused(with("\"min_free_download_mb\": 700", "\"min_free_download_mb\": \"700\""));
-        refused(with("\"min_free_download_mb\": 700", "\"min_free_download_mb\": 9000"));
         refused(with("\"min_battery_percent\": 25", "\"min_battery_percent\": 250"));
         refused(with("\"download_kib_s\": 3000", "\"download_kib_s\": 0"));
-        refused(with("{\"min_available_mb\": 0, \"jobs\": 1}", "{\"min_available_mb\": 10, \"jobs\": 1}"));
-        refused(with("{\"min_available_mb\": 2000, \"jobs\": 3}", "{\"min_available_mb\": 1000, \"jobs\": 3}"));
-        refused(with("{\"min_available_mb\": 3000, \"jobs\": 4}", "{\"min_available_mb\": 3000, \"jobs\": 1}"));
-        refused(with("\"compile_jobs_by_memory\"", "\"other\""));
+        refused(with("\"build_units\"", "\"other\""));
+        refused(with("\"build_unit_ms\"", "\"build_object_s\""));
     }
 }

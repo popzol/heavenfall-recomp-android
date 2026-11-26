@@ -38,6 +38,35 @@ final class Support {
         return Tuning.parse(tuningJson());
     }
 
+    /** A file of the repository (mh4n's, the app's), found from the module's folder or from the project's. */
+    static String readRepo(String relative) {
+        for (String up : new String[] {"../../", "../", ""}) {
+            File f = new File(up + relative);
+            if (f.isFile()) {
+                try {
+                    return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        }
+        throw new IllegalStateException("cannot find " + relative + " from " + new File(".").getAbsolutePath());
+    }
+
+    /** The build's own numbers, as the APK's tools carry them (mh4n/config/build_tuning.json). */
+    static BuildNeeds buildNeeds() {
+        try {
+            return BuildNeeds.parse(readRepo("mh4n/" + BuildNeeds.FILE));
+        } catch (BuildNeeds.InvalidException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** The home screen's model with the app's tuning and the build's numbers. */
+    static HomeModel model() {
+        return new HomeModel(tuning(), buildNeeds());
+    }
+
     /** 64 hex digits made of one digit. */
     /** The library file the records of {@link #installed} name. */
     static final LibraryFile LIBRARY_FILE = new LibraryFile(sha('f'), 1, 1);

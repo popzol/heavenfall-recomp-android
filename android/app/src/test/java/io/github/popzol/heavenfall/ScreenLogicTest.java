@@ -69,7 +69,7 @@ public class ScreenLogicTest {
         f.permission = true;
         f.folder = new File("x");
         f.freeBytes = 123;
-        f.availableMemoryMb = 456;
+        f.memoryInAllMb = 456;
         f.batteryPercent = 77;
         f.charging = true;
         f.appVersion = "1.2.3";
@@ -86,7 +86,7 @@ public class ScreenLogicTest {
         assertTrue(in.releaseHasXxSet);
         assertTrue(in.checking);
         assertEquals(123, in.freeBytes);
-        assertEquals(456, in.availableMemoryMb);
+        assertEquals(456, in.memoryInAllMb);
         assertEquals(77, in.batteryPercent);
         assertTrue(in.charging);
         assertEquals("1.2.3", in.appVersion);

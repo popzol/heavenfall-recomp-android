@@ -17,8 +17,10 @@ import org.junit.Test;
 
 public class HomeModelTest {
     private static final long GB = 1L << 30;
+    private static final long MB = 1L << 20;
     private final Tuning tuning = Support.tuning();
-    private final HomeModel model = new HomeModel(tuning);
+    private final BuildNeeds needs = Support.buildNeeds();
+    private final HomeModel model = new HomeModel(tuning, needs);
 
     private static Installed installed(String version, boolean xx) {
         return Support.installed("beta", version, "s.hfpatch", sha('a'), xx, sha('b'), "tools-7", sha('b'));
@@ -35,7 +37,7 @@ public class HomeModelTest {
         in.latestApp = "v1.0.0";
         in.latestMod = "v0.2.3";
         in.freeBytes = 50 * GB;
-        in.availableMemoryMb = 6000;
+        in.memoryInAllMb = 6000;
         in.batteryPercent = 80;
         return in;
     }
@@ -185,19 +187,20 @@ public class HomeModelTest {
     public void installBlocked() {
         HomeModel.Input in = good();
         in.installed = null;
-        in.freeBytes = 1 * GB;
+        in.freeBytes = 100 * MB;
         in.batteryPercent = 10;
-        in.availableMemoryMb = 100;
+        in.memoryInAllMb = 100;
         HomeModel.Output out = run(in);
         assertEquals(Action.INSTALL, out.action);
         assertFalse(out.enabled);
         assertTrue(blocked(out, "hf_block_space"));
         assertTrue(blocked(out, "hf_block_battery"));
-        assertTrue(blocked(out, "hf_block_memory"));
+        assertTrue(blocked(out, "hf_block_memory_never"));
         for (HomeModel.Block b : out.blocks) assertTrue("every block has advice", b.advice.key.startsWith("hf_advice_"));
         HomeModel.Block space = out.blocks.get(0);
         assertEquals(2, space.reason.args.size());
-        assertEquals(String.valueOf(tuning.minFreeBuildMb), space.reason.args.get(0));
+        assertEquals("the larger of the download's room and the build's own",
+                String.valueOf(Math.max(tuning.minFreeDownloadMb, needs.spaceMb)), space.reason.args.get(0));
 
         in.charging = true;
         assertFalse("charging lifts the battery rule", blocked(run(in), "hf_block_battery"));
@@ -222,6 +225,44 @@ public class HomeModelTest {
         assertFalse(blocked(out, "hf_block_no_network"));
     }
 
+    /**
+     * Catches Home's space and memory before a build going by other numbers than the build's own (BuildNeeds, the
+     * build_tuning.json phone_build.py checks itself against): the build's room counts its work folder and its
+     * cache above the floor, as the build does; the memory is the phone's in all against the translation's peak (a
+     * phone short of free memory now still builds).
+     */
+    @Test
+    public void aBuildGoesByTheBuildsOwnNumbers() {
+        HomeModel.Input in = good();
+        in.library = Library.NONE;
+        in.latestMod = null;
+        in.latestApp = null;
+        in.freeBytes = needs.spaceMb * MB - 1;
+        assertTrue(blocked(run(in), "hf_block_space"));
+        assertEquals(String.valueOf(needs.spaceMb), run(in).blocks.get(0).reason.args.get(0));
+        in.freeBytes = needs.spaceMb * MB;
+        assertTrue("the build's own need, not the download's or a guess", run(in).enabled);
+        in.freeBytes = 10 * MB;
+        in.builderWorkBytes = needs.spaceMb * MB;
+        assertTrue("a build cut short: its work folder is room", run(in).enabled);
+        in.builderWorkBytes = 0;
+        in.objectCacheBytes = (needs.cacheFloorMb + needs.spaceMb) * MB;
+        assertTrue("the cache above its floor is room", run(in).enabled);
+        in.objectCacheBytes = needs.cacheFloorMb * MB;
+        assertTrue(blocked(run(in), "hf_block_space"));
+        in.freeBytes = 50 * GB;
+        in.memoryInAllMb = needs.translationPeakMb - 1;
+        HomeModel.Output out = run(in);
+        assertTrue(blocked(out, "hf_block_memory_never"));
+        assertEquals(String.valueOf(needs.translationPeakMb), out.blocks.get(0).reason.args.get(1));
+        in.memoryInAllMb = needs.translationPeakMb;
+        assertTrue(run(in).enabled);
+        HomeModel none = new HomeModel(tuning, BuildNeeds.NONE);
+        in.freeBytes = 1;
+        in.memoryInAllMb = 1;
+        assertTrue("the build's numbers unread: the build checks itself", none.compute(in).enabled);
+    }
+
     /** An unknown reading (-1) never blocks: only a known low value does. */
     @Test
     public void unknownReadingsDoNotBlock() {
@@ -229,7 +270,7 @@ public class HomeModelTest {
         in.installed = null;
         in.freeBytes = -1;
         in.batteryPercent = -1;
-        in.availableMemoryMb = -1;
+        in.memoryInAllMb = -1;
         assertTrue(run(in).enabled);
     }
 
@@ -365,7 +406,7 @@ public class HomeModelTest {
         HomeModel.Output out = run(in);
         assertEquals(Action.BUILD, out.action);
         assertTrue(out.enabled);
-        in.freeBytes = 2 * GB;
+        in.freeBytes = 100 * MB;
         in.batteryPercent = 3;
         out = run(in);
         assertFalse(out.enabled);
@@ -381,7 +422,7 @@ public class HomeModelTest {
         in.latestApp = null;
         in.freeBytes = 10L << 20;
         in.batteryPercent = 2;
-        in.availableMemoryMb = 50;
+        in.memoryInAllMb = 50;
         HomeModel.Output out = run(in);
         assertEquals(Action.PLAY, out.action);
         assertState("hf_state_offline", out);
@@ -416,7 +457,7 @@ public class HomeModelTest {
 
         in.batteryPercent = 5;
         in.freeBytes = 1;
-        in.availableMemoryMb = 1;
+        in.memoryInAllMb = 1;
         out = run(in);
         assertTrue(out.enabled);
         assertTrue(out.blocks.isEmpty());

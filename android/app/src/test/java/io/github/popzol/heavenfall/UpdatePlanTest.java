@@ -163,11 +163,11 @@ public class UpdatePlanTest {
     @Test
     public void jobLeft() {
         Resume note = new Resume("beta", "1.1", "0.3", false, 100);
-        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(note, "1.1", false));
+        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(note, "1.1", false, false));
         assertEquals("a note the install never fulfilled is not a job", HomeModel.Job.NONE,
-                UpdatePlan.jobLeft(note, "1.0", false));
-        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(null, "1.0", true));
-        assertEquals(HomeModel.Job.NONE, UpdatePlan.jobLeft(null, "1.0", false));
+                UpdatePlan.jobLeft(note, "1.0", false, false));
+        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(null, "1.0", true, false));
+        assertEquals(HomeModel.Job.NONE, UpdatePlan.jobLeft(null, "1.0", false, false));
     }
 
     /** What each interrupted step leaves, so the next start knows what to redo. */

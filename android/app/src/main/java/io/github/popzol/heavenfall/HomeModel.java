@@ -78,10 +78,16 @@ public final class HomeModel {
         public boolean releaseHasXxSet;
         /** The check for the latest versions is still running. */
         public boolean checking;
-        /** Free bytes where the downloads and the mod go, available memory in MB, battery percent: -1 unknown. */
+        /**
+         * Free bytes where the downloads, the mod and the build go, the phone's memory in all with its swap in MB,
+         * battery percent: -1 unknown.
+         */
         public long freeBytes = -1;
-        public long availableMemoryMb = -1;
+        public long memoryInAllMb = -1;
         public int batteryPercent = -1;
+        /** The builder's own files a build gives back as room: its work folder and its objects' cache (bytes). */
+        public long builderWorkBytes;
+        public long objectCacheBytes;
         public boolean charging;
         public Job job = Job.NONE;
     }
@@ -146,9 +152,12 @@ public final class HomeModel {
     }
 
     private final Tuning tuning;
+    private final BuildNeeds needs;
 
-    public HomeModel(Tuning tuning) {
+    /** With the build's own numbers ({@link BuildNeeds}) for the space and memory a build needs. */
+    public HomeModel(Tuning tuning, BuildNeeds needs) {
         this.tuning = tuning;
+        this.needs = needs == null ? BuildNeeds.NONE : needs;
     }
 
     public Output compute(Input in) {
@@ -177,7 +186,7 @@ public final class HomeModel {
             out.includesBuild = true;
             List<Block> blocks = new ArrayList<>();
             addNetwork(in, blocks);
-            blocks.addAll(heavy(in, true));
+            blocks.addAll(heavy(in, true, true));
             out.blocks = blocks;
             out.enabled = blocks.isEmpty();
             return out;
@@ -200,7 +209,7 @@ public final class HomeModel {
             out.includesBuild = true;
             List<Block> blocks = new ArrayList<>();
             addNetwork(in, blocks);
-            blocks.addAll(heavy(in, true));
+            blocks.addAll(heavy(in, true, true));
             out.blocks = blocks;
             out.enabled = blocks.isEmpty();
             return out;
@@ -225,7 +234,7 @@ public final class HomeModel {
                 out.state = new Text("hf_state_app_update", out.targetVersion);
             }
             out.button = new Text("hf_btn_update_to", out.targetVersion);
-            List<Block> blocks = heavy(in, build);
+            List<Block> blocks = heavy(in, true, build);
             out.blocks = blocks;
             out.enabled = blocks.isEmpty();
             out.canPlay = playable;
@@ -241,7 +250,7 @@ public final class HomeModel {
                     : in.library == Library.OTHER_TOOLS ? new Text("hf_state_rebuild_other_tools_noid")
                     : new Text("hf_state_rebuild_other_mod");
             out.includesBuild = true;
-            out.blocks = heavy(in, true);
+            out.blocks = heavy(in, false, true);
             out.enabled = out.blocks.isEmpty();
             return out;
         }
@@ -320,11 +329,17 @@ public final class HomeModel {
         else blocks.add(new Block(new Text("hf_block_no_network"), new Text("hf_advice_connect")));
     }
 
-    /** Space, battery and memory against the tuning, for an action that downloads and, with {@code build}, builds. */
-    private List<Block> heavy(Input in, boolean build) {
+    /**
+     * Space, battery and memory for an action that, with {@code downloads}, downloads and applies a mod
+     * ({@code tuning.json}'s room) and, with {@code build}, builds the library: the build's own numbers
+     * ({@link BuildNeeds}: the free space less the room the builder's own files give back, and the phone's memory in
+     * all against the translation's peak) and {@code tuning.json}'s battery.
+     */
+    private List<Block> heavy(Input in, boolean downloads, boolean build) {
         List<Block> blocks = new ArrayList<>();
-        long need = build ? tuning.minFreeBuildBytes() : tuning.minFreeDownloadBytes();
-        if (in.freeBytes >= 0 && in.freeBytes < need) {
+        long need = downloads ? tuning.minFreeDownloadBytes() : 0;
+        if (build) need = Math.max(need, needs.freeBytesNeeded(needs.roomBytes(in.builderWorkBytes, in.objectCacheBytes)));
+        if (in.freeBytes >= 0 && need > 0 && in.freeBytes < need) {
             blocks.add(new Block(new Text("hf_block_space", megabytes(need), megabytes(in.freeBytes)),
                     new Text("hf_advice_space")));
         }
@@ -333,9 +348,9 @@ public final class HomeModel {
                 blocks.add(new Block(new Text("hf_block_battery", String.valueOf(in.batteryPercent)),
                         new Text("hf_advice_battery")));
             }
-            if (in.availableMemoryMb >= 0 && in.availableMemoryMb < tuning.minAvailableMemoryMb) {
-                blocks.add(new Block(new Text("hf_block_memory", String.valueOf(in.availableMemoryMb)),
-                        new Text("hf_advice_memory")));
+            if (needs.neverFits(in.memoryInAllMb)) {
+                blocks.add(new Block(new Text("hf_block_memory_never", String.valueOf(in.memoryInAllMb),
+                        String.valueOf(needs.translationPeakMb)), new Text("hf_advice_memory_never")));
             }
         }
         return blocks;

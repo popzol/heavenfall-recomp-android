@@ -100,9 +100,14 @@ public final class PhoneLibraryBuilder implements LibraryBuilder {
         try {
             HeavenfallBridge.startBuild(context, paths.gameDump, paths.updateDump, libraryDir, MOD_FLAG, paths.modDir);
             HeavenfallBridge.BuildStatus s = awaitStart(changed, control);
+            boolean cacheSaid = false;
             while (s.active) {
                 long now = System.currentTimeMillis();
                 eta.sample(now, s.stage, s.done, s.total);
+                if (!cacheSaid && s.toCompile >= 0) {
+                    eta.cache(now, s.cacheHits, s.toCompile);
+                    cacheSaid = true;
+                }
                 progress.msLeft(eta.msLeft(now));
                 progress.fraction(Math.max(0, s.percent) / 100.0);
                 if (control.isCancelled()) {
@@ -162,7 +167,7 @@ public final class PhoneLibraryBuilder implements LibraryBuilder {
                 // the player's cancel is the job's own; any other stop is the system's (a service time limit)
                 throw new UpdateException(control.isCancelled() ? UpdateFailure.CANCELLED : UpdateFailure.INTERRUPTED, "build");
             default:
-                throw new UpdateException(BuildFailures.forStage(s.errorStage), s.errorStage + ": " + s.errorText);
+                throw BuildFailures.exception(s.errorStage, s.errorText);
         }
     }
 }

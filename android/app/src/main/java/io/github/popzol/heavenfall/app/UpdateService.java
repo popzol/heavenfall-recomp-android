@@ -145,11 +145,12 @@ public final class UpdateService extends Service {
     /**
      * For {@code HomeModel.Input.job}: RUNNING while a job runs, HALF_DONE when one was left half-done
      * ({@link io.github.popzol.heavenfall.UpdatePlan#jobLeft}: a resume note the app can go on with, a staging
-     * folder), else NONE.
+     * folder, a build cut short), else NONE.
      */
     public static HomeModel.Job jobState(Context context) {
         if (running()) return HomeModel.Job.RUNNING;
-        return JobState.left(Locations.places(context), Locations.gameFolder(context), runningVersion(context));
+        return JobState.left(Locations.places(context), Locations.gameFolder(context), runningVersion(context),
+                com.mh4u.port.HeavenfallBridge.buildCutShort(context));
     }
 
     /** Home's Discard, after its question: what the half-done job left is deleted (never while a job runs). */
@@ -180,7 +181,7 @@ public final class UpdateService extends Service {
         String running = runningVersion(context);
         if (note.verdict(running) != Resume.Verdict.GO) {
             // forgets a note the install never made good
-            JobState.left(saved.paths.places, Locations.gameFolder(context), running);
+            JobState.left(saved.paths.places, Locations.gameFolder(context), running, false);
             return;
         }
         boolean started = false;

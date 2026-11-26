@@ -75,7 +75,7 @@ public class UpdateCheckTest {
         in.update = HomeModel.Source.GOOD;
         in.installed = Support.installed("beta", "v0.4", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
         in.library = HomeModel.Library.GOOD;
-        assertEquals(HomeModel.Action.PLAY, new HomeModel(Support.tuning()).compute(in).action);
+        assertEquals(HomeModel.Action.PLAY, Support.model().compute(in).action);
     }
 
     private static Matcher placeholders(String text) {

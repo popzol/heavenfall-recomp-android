@@ -85,15 +85,32 @@ public class JobStateTest {
     /** F3: a download cut short is not a half-done job; a staging folder (the mod being made) is. */
     @Test
     public void halfDoneOnlyPastTheDownloads() throws Exception {
-        assertEquals(HomeModel.Job.NONE, JobState.left(places, gameFolder, "1.0.0"));
+        assertEquals(HomeModel.Job.NONE, JobState.left(places, gameFolder, "1.0.0", false));
         Records.write(places.jobFile, job(game.getPath(), update.getPath()));
         write(new File(places.downloads, "set.hfpatch.part"), "half");
-        assertEquals(HomeModel.Job.NONE, JobState.left(places, gameFolder, "1.0.0"));
+        assertEquals(HomeModel.Job.NONE, JobState.left(places, gameFolder, "1.0.0", false));
         write(new File(places.staging, "exefs/code.bin"), "c");
-        assertEquals(HomeModel.Job.HALF_DONE, JobState.left(places, gameFolder, "1.0.0"));
+        assertEquals(HomeModel.Job.HALF_DONE, JobState.left(places, gameFolder, "1.0.0", false));
         Files.write(places.jobFile.toPath(), "{\"format\":".getBytes(StandardCharsets.UTF_8));
         assertEquals("an unparsable job.json is no job (and no crash)", HomeModel.Job.NONE,
-                JobState.left(places, gameFolder, "1.0.0"));
+                JobState.left(places, gameFolder, "1.0.0", false));
+    }
+
+    /**
+     * Catches a cancelled or stopped build that loses Resume (Resume goes on from the unit the build reached, without
+     * translating again): a saved job with the builder's work folder left is half-done; with no saved job (Discard,
+     * or a Build alone) it is not, and Build goes on from the same folder.
+     */
+    @Test
+    public void aBuildCutShortLeavesResume() throws Exception {
+        assertEquals(HomeModel.Job.NONE, JobState.left(places, gameFolder, "1.0.0", true));
+        Records.write(places.jobFile, job(game.getPath(), update.getPath()));
+        assertEquals(HomeModel.Job.HALF_DONE, JobState.left(places, gameFolder, "1.0.0", true));
+        assertEquals(HomeModel.Job.NONE, JobState.left(places, gameFolder, "1.0.0", false));
+        assertTrue(JobState.discard(places));
+        assertEquals(HomeModel.Job.NONE, JobState.left(places, gameFolder, "1.0.0", true));
+        String service = Support.readRepo("android/app/src/main/java/io/github/popzol/heavenfall/app/UpdateService.java");
+        assertTrue(service.contains("com.mh4u.port.HeavenfallBridge.buildCutShort(context));"));
     }
 
     /** F3: Discard removes what the job left and never the installed mod, its record or the library. */
@@ -114,7 +131,7 @@ public class JobStateTest {
         String[] left = places.downloads.list();
         assertTrue(left == null || left.length == 0);
         assertTrue(code.isFile() && places.installedFile.isFile() && lib.isFile() && game.isFile());
-        assertEquals(HomeModel.Job.NONE, JobState.left(places, gameFolder, "1.0.0"));
+        assertEquals(HomeModel.Job.NONE, JobState.left(places, gameFolder, "1.0.0", false));
         assertTrue("discarding nothing is fine", JobState.discard(places));
     }
 }

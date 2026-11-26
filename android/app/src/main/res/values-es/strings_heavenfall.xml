@@ -80,7 +80,8 @@
     <string name="hf_advice_space">Libera espacio en el móvil y vuelve a intentarlo.</string>
     <string name="hf_block_battery">La batería está al %1$s%%</string>
     <string name="hf_advice_battery">Conecta el móvil al cargador antes de seguir: esto tarda mucho.</string>
-    <string name="hf_block_memory">Solo quedan %1$s MB de memoria libre</string>
+    <string name="hf_block_memory_never">Este móvil tiene %1$s MB de memoria; construir el código del juego necesita unos %2$s MB</string>
+    <string name="hf_advice_memory_never">El código del juego no se puede construir en este móvil.</string>
     <string name="hf_advice_memory">Cierra otras apps y vuelve a intentarlo.</string>
 
     <!-- Una versión que no se aceptó -->
@@ -141,6 +142,11 @@
     <string name="hf_fail_apply_failed">No se pudo crear el mod</string>
     <string name="hf_fail_build_space">No hay espacio libre suficiente para construir el código del juego</string>
     <string name="hf_fail_build_memory">El móvil se quedó sin memoria al construir el código del juego</string>
+    <string name="hf_fail_build_space_mb">Para construir el código del juego hacen falta %1$s MB más de espacio libre</string>
+    <string name="hf_fail_build_memory_never">Este móvil no tiene memoria suficiente para construir el código del juego</string>
+    <string name="hf_fail_build_memory_never_mb">Este móvil tiene %1$s MB de memoria; construir el código del juego necesita unos %2$s MB</string>
+    <string name="hf_fail_build_compile_memory">El móvil se quedó sin memoria al compilar una parte del código del juego</string>
+    <string name="hf_advice_compile_memory">Cierra otras apps o reinicia el móvil y vuelve a intentarlo: sigue desde donde se quedó.</string>
     <string name="hf_fail_build_tools">No se pudieron descargar las herramientas para construir el código del juego</string>
     <string name="hf_fail_build_game_files">Tus archivos del juego no son los que necesita la construcción</string>
     <string name="hf_fail_build_compile">La herramienta falló al construir el código del juego</string>

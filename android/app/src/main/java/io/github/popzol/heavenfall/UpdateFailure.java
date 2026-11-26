@@ -34,6 +34,10 @@ public enum UpdateFailure {
     APPLY_FAILED("hf_fail_apply_failed", "hf_advice_resume"),
     BUILD_SPACE("hf_fail_build_space", "hf_advice_space"),
     BUILD_MEMORY("hf_fail_build_memory", "hf_advice_memory"),
+    /** The phone has less memory in all (with its swap) than the translation's peak: it can never build. */
+    BUILD_MEMORY_NEVER("hf_fail_build_memory_never", "hf_advice_memory_never"),
+    /** A part of the code Android stopped compiling with nothing else running, at the end of the build's retries. */
+    BUILD_COMPILE_MEMORY("hf_fail_build_compile_memory", "hf_advice_compile_memory"),
     BUILD_BATTERY("hf_fail_build_battery", "hf_advice_battery"),
     /** The installed mod's code is not the one installed.json recorded: the mod is made again, never built as it is. */
     MOD_CHANGED("hf_fail_mod_changed", "hf_advice_reinstall"),

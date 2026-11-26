@@ -26,11 +26,13 @@ public final class HeavenfallBridge {
         public final String errorStage;
         public final String errorText;
         public final boolean active;
-        /** The stage's own count (in "compile": the objects done of the total; up to date ones are done), 0 when none. */
+        /** The stage's own count (in "compile": the units with their object of all the units), 0 when none. */
         public final long done, total;
+        /** The log's line of the objects' cache: units it gave, units to compile; -1 until the build printed it. */
+        public final long cacheHits, toCompile;
 
         BuildStatus(String status, String stage, int percent, String errorStage, String errorText, boolean active,
-                    long done, long total) {
+                    long done, long total, long cacheHits, long toCompile) {
             this.status = status;
             this.stage = stage;
             this.percent = percent;
@@ -39,6 +41,8 @@ public final class HeavenfallBridge {
             this.active = active;
             this.done = done;
             this.total = total;
+            this.cacheHits = cacheHits;
+            this.toCompile = toCompile;
         }
     }
 
@@ -69,16 +73,56 @@ public final class HeavenfallBridge {
 
     public static BuildStatus buildStatus() {
         BuilderService.Job j = BuilderService.job;
+        long[] cache = cacheLine;
         return new BuildStatus(j.status, j.stage, BuilderText.percent(j), j.errorStage, j.errorText, j.active(), j.done,
-                j.total);
+                j.total, cache == null ? -1 : cache[0], cache == null ? -1 : cache[1]);
     }
 
-    /** The objects an earlier build left in the builder's work folder (phone_build.py's game/recomp/obj), 0 for none. */
+    private static volatile long[] cacheLine;
+
+    /** A line of the running build's log (the service's reader calls it for every line but its @@ ones). */
+    static void builderLine(String line) {
+        long[] c = io.github.popzol.heavenfall.BuildEta.cacheLine(line);
+        if (c != null) cacheLine = c;
+    }
+
+    /** The objects' cache, beside the work folder in the app's private files (phone_build.py's default). */
+    static File objectCache(Context c) {
+        return new File(BuilderTools.root(c), "object-cache");
+    }
+
+    /**
+     * The objects the builder keeps for a next build: its objects' cache's (kept across builds, mod versions and
+     * "start over") or, more, the work folder's of a build cut short; 0 for none.
+     */
     public static long objectsKept(Context c) {
+        long work = 0, cached = 0;
         String[] names = new File(BuilderService.work(c), "game/recomp/obj").list();
-        long n = 0;
-        if (names != null) for (String name : names) if (name.endsWith(".o")) n++;
-        return n;
+        if (names != null) for (String name : names) if (name.endsWith(".o")) work++;
+        File[] shards = new File(objectCache(c), "objects").listFiles(File::isDirectory);
+        if (shards != null) {
+            for (File shard : shards) {
+                String[] objects = shard.list();
+                if (objects != null) for (String name : objects) if (name.endsWith(".o")) cached++;
+            }
+        }
+        return Math.max(work, cached);
+    }
+
+    /** The bytes of the builder's work folder (a build cut short; a whole one deletes it), 0 for none. */
+    public static long workBytes(Context c) {
+        return BuilderTools.sizeOf(BuilderService.work(c));
+    }
+
+    /** The bytes of the objects' cache. */
+    public static long cacheBytes(Context c) {
+        return BuilderTools.sizeOf(objectCache(c));
+    }
+
+    /** A build was cut short (cancelled, failed or stopped): its work folder is there for the next run to go on. */
+    public static boolean buildCutShort(Context c) {
+        String[] names = BuilderService.work(c).list();
+        return names != null && names.length > 0;
     }
 
     /** The build's state goes back to idle after its end was read (the next start begins clean anyway). */
@@ -101,6 +145,7 @@ public final class HeavenfallBridge {
      * {@code --user-mods}); null for none.
      */
     public static void startBuild(Context c, File game, File update, File dest, String modFlag, File mod) {
+        cacheLine = null;
         Intent run = new Intent(c, BuilderService.class)
                 .putExtra(BuilderService.EXTRA_GAME, game.getAbsolutePath())
                 .putExtra(BuilderService.EXTRA_UPDATE, update.getAbsolutePath())

@@ -130,13 +130,13 @@ public class ModSwapTest {
         assertEquals(ModSwap.Recovery.NOTHING, swap.recover());
         assertTrue(swap.stagingLeft());
         assertEquals("old", code(installed));
-        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(null, "1.0", swap.stagingLeft()));
+        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(null, "1.0", swap.stagingLeft(), false));
         // the next run starts with an empty one
         File fresh = swap.begin();
         assertEquals(0, fresh.list().length);
         swap.discardStaging();
         assertFalse(swap.stagingLeft());
-        assertEquals(HomeModel.Job.NONE, UpdatePlan.jobLeft(null, "1.0", swap.stagingLeft()));
+        assertEquals(HomeModel.Job.NONE, UpdatePlan.jobLeft(null, "1.0", swap.stagingLeft(), false));
     }
 
     @Test

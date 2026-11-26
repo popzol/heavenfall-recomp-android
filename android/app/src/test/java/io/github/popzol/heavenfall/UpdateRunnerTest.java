@@ -376,7 +376,7 @@ public class UpdateRunnerTest {
         assertEquals("v0.3", note.modTarget);
         assertTrue("the bar goes on from here", note.basePermille > 0);
         // the new app starts: the saved request goes on from the note, without the APK step
-        assertEquals(HomeModel.Job.HALF_DONE, JobState.left(paths.places, gameFolder, "1.1.0"));
+        assertEquals(HomeModel.Job.HALF_DONE, JobState.left(paths.places, gameFolder, "1.1.0", false));
         UpdateRequest saved = JobState.savedRequest(paths.places, gameFolder);
         assertNotNull(saved);
         seen.clear();
@@ -403,7 +403,7 @@ public class UpdateRunnerTest {
         assertTrue("nothing after the APK ran", calls.size() == 1);
         // a note left by an install that did not happen (the process died) is dropped by the home's check
         Files.write(paths.resumeFile.toPath(), new Resume("heavenfall_beta", "v1.1.0", "v0.3", false, 100).toJson().getBytes(StandardCharsets.UTF_8));
-        assertEquals(HomeModel.Job.NONE, JobState.left(paths.places, gameFolder, "1.0.0"));
+        assertEquals(HomeModel.Job.NONE, JobState.left(paths.places, gameFolder, "1.0.0", false));
         assertFalse(paths.resumeFile.exists());
     }
 
@@ -433,7 +433,7 @@ public class UpdateRunnerTest {
         File part = Downloader.partOf(paths.downloads, setName);
         assertTrue(part.isFile());
         assertEquals("F3: a download cut short is not a half-done job (Play stays; Update goes on from the part)",
-                HomeModel.Job.NONE, JobState.left(paths.places, gameFolder, "1.0.0"));
+                HomeModel.Job.NONE, JobState.left(paths.places, gameFolder, "1.0.0", false));
         long have = part.length();
         server.file("/github/" + beta.repository + "/releases/download/v0.3/" + setName, set);
         JobProgress again = run(request("1.0.0", false));
@@ -494,16 +494,6 @@ public class UpdateRunnerTest {
     public void aLowBatteryStopsTheBuildStepOnly() throws Exception {
         publishMod("v0.3", false);
         conditions = new UpdateRunner.Conditions() {
-            @Override
-            public long freeBytes() {
-                return -1;
-            }
-
-            @Override
-            public long availableMemoryMb() {
-                return -1;
-            }
-
             @Override
             public int batteryPercent() {
                 return 3;
