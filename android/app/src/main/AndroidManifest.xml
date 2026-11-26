@@ -22,6 +22,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- the app's own update (io.github.popzol.heavenfall.app.SelfUpdate): a PackageInstaller session for this app only;
+         UPDATE_PACKAGES_WITHOUT_USER_ACTION lets Android 12 and later skip the confirmation when an app updates itself -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
     <!-- allowNativeHeapPointerTagging=false: the runtime turns host pointers into 32-bit guest addresses and does not
          expect the tag Android puts in the top byte of malloc's pointers on arm64.
@@ -165,6 +169,20 @@
         <service android:name=".BuilderService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
+
+        <!-- The update job (the APK, the mod, the library under one bar): a foreground service, resumable -->
+        <service android:name="io.github.popzol.heavenfall.app.UpdateService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+        <!-- The PackageInstaller's result for the app's own update, and the update going on after the app was replaced -->
+        <receiver android:name="io.github.popzol.heavenfall.app.InstallResultReceiver"
+            android:exported="false" />
+        <receiver android:name="io.github.popzol.heavenfall.app.PackageReplacedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <activity android:name=".LicensesActivity"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"

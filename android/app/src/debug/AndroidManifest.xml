@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug builds only: test releases may be served over http from a computer on the local network
+         (TestReleases; the downloader still talks only to the one host in the player's test file) -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

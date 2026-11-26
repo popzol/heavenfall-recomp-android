@@ -104,4 +104,65 @@
     <string name="hf_step_shared">Descargando los archivos compartidos</string>
     <string name="hf_step_apply">Creando el mod</string>
     <string name="hf_step_build">Construyendo el código del juego</string>
+
+    <!-- Un trabajo de actualización: la línea de estado bajo la barra -->
+    <string name="hf_state_job_idle">No se está actualizando nada</string>
+    <string name="hf_state_job_checking">Buscando actualizaciones…</string>
+    <string name="hf_state_job_installing_app">Instalando la versión nueva de la app…</string>
+    <string name="hf_state_job_confirm_install">Confirma la instalación en la pantalla para seguir</string>
+    <string name="hf_state_job_restarting">La app se reinicia para terminar la actualización…</string>
+    <string name="hf_state_job_done">La actualización está hecha</string>
+    <string name="hf_state_job_cancelled">Se canceló la actualización</string>
+    <string name="hf_state_job_failed">La actualización se detuvo</string>
+
+    <!-- Por qué se detuvo una actualización, y qué hacer -->
+    <string name="hf_fail_network">Se cayó o se cortó la conexión</string>
+    <string name="hf_fail_server">GitHub respondió con el error %1$s</string>
+    <string name="hf_fail_untrusted_address">La dirección de la descarga no es una de las que Heavenfall admite</string>
+    <string name="hf_fail_bad_size">El archivo descargado no tiene el tamaño que indica la versión</string>
+    <string name="hf_fail_bad_digest">El archivo descargado no coincide con su suma de control</string>
+    <string name="hf_fail_no_space">No hay espacio libre suficiente para descargar el archivo</string>
+    <string name="hf_fail_cannot_write">No se pudo guardar el archivo en el móvil</string>
+    <string name="hf_fail_cancelled">Se canceló la actualización</string>
+    <string name="hf_fail_interrupted">Android detuvo la actualización</string>
+    <string name="hf_fail_unexpected">La actualización se detuvo por un error inesperado</string>
+    <string name="hf_fail_self_unreadable">No se pudo leer la app descargada</string>
+    <string name="hf_fail_self_other_app">El archivo descargado no es Heavenfall</string>
+    <string name="hf_fail_self_not_newer">La app descargada no es más nueva que esta</string>
+    <string name="hf_fail_self_other_signer">La app descargada no está firmada por el mismo autor que esta</string>
+    <string name="hf_fail_self_aborted">No se confirmó la instalación de la app nueva</string>
+    <string name="hf_fail_self_blocked">Android bloqueó la instalación de la app nueva</string>
+    <string name="hf_fail_self_conflict">La app nueva choca con la instalada</string>
+    <string name="hf_fail_self_incompatible">La app nueva no es compatible con este móvil</string>
+    <string name="hf_fail_self_invalid">Android encontró inválida la app nueva</string>
+    <string name="hf_fail_self_storage">No hay espacio suficiente para instalar la app nueva</string>
+    <string name="hf_fail_self_no_answer">No se confirmó a tiempo la instalación de la app nueva</string>
+    <string name="hf_fail_self_failed">No se pudo instalar la app nueva</string>
+    <string name="hf_fail_apply_unavailable">Esta versión de la app todavía no puede crear el mod</string>
+    <string name="hf_fail_apply_failed">No se pudo crear el mod</string>
+    <string name="hf_fail_build_space">No hay espacio libre suficiente para construir el código del juego</string>
+    <string name="hf_fail_build_memory">El móvil se quedó sin memoria al construir el código del juego</string>
+    <string name="hf_fail_build_tools">No se pudieron descargar las herramientas para construir el código del juego</string>
+    <string name="hf_fail_build_game_files">Tus archivos del juego no son los que necesita la construcción</string>
+    <string name="hf_fail_build_compile">La herramienta falló al construir el código del juego</string>
+    <string name="hf_fail_build_install">No se pudo guardar el código del juego en su carpeta</string>
+    <string name="hf_fail_build_failed">No se pudo construir el código del juego</string>
+    <string name="hf_advice_resume">Vuelve a intentarlo: sigue desde donde se quedó.</string>
+    <string name="hf_advice_download_again">No se usó el archivo. Vuelve a intentar descargarlo.</string>
+    <string name="hf_advice_other_signer">Instala Heavenfall de nuevo desde su página oficial: esta copia viene de otra fuente.</string>
+    <string name="hf_advice_allow_installs">Permite que Heavenfall instale apps en los ajustes de Android y vuelve a intentarlo.</string>
+    <string name="hf_advice_game_files">Comprueba que tu juego y su actualización 1.3.0 son los americanos descifrados.</string>
+    <string name="hf_advice_share_log">Vuelve a intentarlo; si falla otra vez, comparte el registro desde Más.</string>
+
+    <!-- Las notificaciones del trabajo de actualización -->
+    <string name="hf_note_channel">Actualizaciones</string>
+    <string name="hf_note_cancel">Cancelar</string>
+    <string name="hf_note_running_title">Actualizando Heavenfall</string>
+    <string name="hf_note_done_title">Heavenfall está actualizado</string>
+    <string name="hf_note_failed_title">La actualización se detuvo</string>
+    <string name="hf_note_cancelled_title">Se canceló la actualización</string>
+    <string name="hf_note_confirm_title">Confirma la versión nueva</string>
+    <string name="hf_note_confirm_text">Toca para confirmar la instalación de la versión nueva de Heavenfall.</string>
+    <string name="hf_note_resume_title">Heavenfall se actualizó</string>
+    <string name="hf_note_resume_text">Toca para terminar la actualización.</string>
 </resources>
