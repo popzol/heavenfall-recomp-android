@@ -102,6 +102,7 @@ public class StringsTest {
         assertTrue(files != null && files.length > 0);
         Pattern literal = Pattern.compile("\"(hf_[a-z0-9_]*[a-z0-9])\"");
         for (File f : files) {
+            if (f.isDirectory()) continue;   // (the app/ folder: Android code, its texts are the screens')
             try {
                 Matcher m = literal.matcher(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8));
                 while (m.find()) keys.add(m.group(1));

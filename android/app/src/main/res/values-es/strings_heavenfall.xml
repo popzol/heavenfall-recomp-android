@@ -104,4 +104,32 @@
     <string name="hf_step_shared">Descargando los archivos compartidos</string>
     <string name="hf_step_apply">Creando el mod</string>
     <string name="hf_step_build">Construyendo el código del juego</string>
+
+    <!-- Por qué se detuvo la creación del mod (en ninguno de estos casos se cambió nada) -->
+    <string name="hf_apply_cancelled">Se canceló la creación del mod</string>
+    <string name="hf_advice_apply_cancelled">No se cambió nada.</string>
+    <string name="hf_apply_set_damaged">El archivo del mod está dañado</string>
+    <string name="hf_apply_set_not_for_app">Este mod no es para esta app</string>
+    <string name="hf_advice_apply_download_again">Actualiza otra vez para descargarlo de nuevo. No se cambió nada.</string>
+    <string name="hf_apply_game_damaged">Tu copia del juego está dañada</string>
+    <string name="hf_apply_game_different">Tu copia del juego no es la que se usó para hacer este mod</string>
+    <string name="hf_apply_update_other">Esta no es la actualización con la que se hizo este mod</string>
+    <string name="hf_advice_apply_update_other">Usa la actualización 1.3.0 del juego americano.</string>
+    <string name="hf_apply_xx_needed">Este mod necesita MH XX</string>
+    <string name="hf_advice_apply_xx_needed">Copia tu propio Monster Hunter XX descifrado en la carpeta.</string>
+    <string name="hf_apply_xx_damaged">Tu copia de MH XX está dañada</string>
+    <string name="hf_advice_apply_dump_again">Vuelve a volcarlo como copia descifrada y cópialo a la carpeta.</string>
+    <string name="hf_advice_apply_clean_copies">Usa copias limpias y sin modificar del juego y su actualización, y vuelve a intentarlo.</string>
+    <string name="hf_apply_shared_bad">Un archivo que el mod necesita está dañado o falta</string>
+    <string name="hf_apply_output_differs">El mod no salió como debía</string>
+    <string name="hf_apply_read_failed">No se pudo leer un archivo</string>
+    <string name="hf_advice_apply_read_failed">Comprueba que los archivos del juego siguen en la carpeta y que el almacenamiento funciona, y vuelve a intentarlo.</string>
+    <string name="hf_apply_write_failed">No se pudieron escribir los archivos del mod</string>
+    <string name="hf_advice_apply_write_failed">Comprueba que el almacenamiento del móvil funciona y vuelve a intentarlo.</string>
+    <string name="hf_apply_no_space">No hay espacio suficiente para crear el mod</string>
+    <string name="hf_apply_no_memory">No hay memoria suficiente para crear el mod</string>
+    <string name="hf_apply_swap_failed">No se pudo poner el mod nuevo en su sitio</string>
+    <string name="hf_advice_apply_swap_failed">El mod antiguo sigue como estaba. Libera espacio y vuelve a intentarlo.</string>
+    <string name="hf_apply_internal">Falló la creación del mod (código %1$s)</string>
+    <string name="hf_advice_apply_internal">Vuelve a intentarlo. Si falla otra vez, comparte el registro desde Más.</string>
 </resources>
