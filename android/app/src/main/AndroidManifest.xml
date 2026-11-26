@@ -31,7 +31,8 @@
          expect the tag Android puts in the top byte of malloc's pointers on arm64.
          extractNativeLibs: the game's code library is opened by path with dlopen.
          hasFragileUserData: on uninstall Android offers to keep the data (the saves are there). -->
-    <application android:label="@string/app_name"
+    <application android:name="io.github.popzol.heavenfall.app.HeavenfallApp"
+        android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:theme="@style/AppTheme"
@@ -67,12 +68,21 @@
             </intent-filter>
         </activity>
 
-        <!-- The entry: starts the game, or shows which files are needed and lets the player choose their folder -->
+        <!-- The game's own entry flow: Play starts it. It starts the game, or shows which files are needed and lets the
+             player choose their folder (the app's entry is the launcher's HomeActivity) -->
         <activity android:name=".GameFolderActivity"
             android:label="@string/app_name"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:screenOrientation="sensorLandscape"
             android:excludeFromRecents="true"
+            android:exported="true" />
+
+        <!-- The launcher's screens (io.github.popzol.heavenfall.app). Home is the app's entry. The others open from it; they are
+             exported only so that a test through adb can open each one: they take no input from the caller -->
+        <activity android:name="io.github.popzol.heavenfall.app.HomeActivity"
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -80,6 +90,18 @@
                 <category android:name="android.intent.category.GAME" />
             </intent-filter>
         </activity>
+        <activity android:name="io.github.popzol.heavenfall.app.AssistantActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:exported="true" />
+        <activity android:name="io.github.popzol.heavenfall.app.MoreActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:exported="true" />
+        <activity android:name="io.github.popzol.heavenfall.app.XxActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:exported="true" />
 
         <!-- Share the log: in a process of its own, alive when the game's has closed because of an error -->
         <activity android:name=".LogShareActivity"

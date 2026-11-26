@@ -192,4 +192,60 @@
     <string name="hf_advice_apply_swap_failed">El mod antiguo sigue como estaba. Libera espacio y vuelve a intentarlo.</string>
     <string name="hf_apply_internal">Falló la creación del mod (código %1$s)</string>
     <string name="hf_advice_apply_internal">Vuelve a intentarlo. Si falla otra vez, comparte el registro desde Más.</string>
+
+    <!-- Las pantallas: Inicio -->
+    <string name="hf_btn_more">Más</string>
+    <string name="hf_btn_cancel">Cancelar</string>
+    <string name="hf_btn_stopping">Deteniendo…</string>
+    <string name="hf_bar_step">Paso %1$s de %2$s</string>
+    <string name="hf_time_left_under_minute">Queda menos de un minuto</string>
+    <string name="hf_time_left_minutes">Quedan unos %1$s min</string>
+    <string name="hf_time_left_hours">Quedan unas %1$s h %2$s min</string>
+    <string name="hf_job_hint">Deja el móvil enchufado. La actualización sigue si sales de la app.</string>
+    <string name="hf_home_versions">App %1$s  ·  Mod %2$s</string>
+    <string name="hf_allow_installs_title">Permitir instalar la versión nueva</string>
+    <string name="hf_allow_installs_text">Para actualizarse, Heavenfall tiene que poder instalar apps. Android abre sus ajustes: activa el interruptor de Heavenfall, vuelve y toca el botón otra vez.</string>
+    <string name="hf_btn_allow">Abrir los ajustes</string>
+    <string name="hf_btn_not_now">Ahora no</string>
+
+    <!-- Las pantallas: el asistente -->
+    <string name="hf_assistant_title">Preparar Heavenfall</string>
+    <string name="hf_assistant_done">Todo listo</string>
+    <string name="hf_assistant_done_text">Tu juego y su actualización están bien. Toca Terminar para volver al inicio.</string>
+    <string name="hf_btn_give_access">Dar acceso a los archivos</string>
+    <string name="hf_btn_choose_folder">Elegir carpeta</string>
+    <string name="hf_btn_other_folder">Elegir otra carpeta</string>
+    <string name="hf_btn_check_again">Comprobar de nuevo</string>
+    <string name="hf_btn_finish">Terminar</string>
+    <string name="hf_btn_later">Más tarde</string>
+    <string name="hf_help_permission">Heavenfall lee tu juego del almacenamiento del móvil, así que Android tiene que dejarle ver todos los archivos. No cambia nada ahí.</string>
+    <string name="hf_help_folder">Elige la carpeta donde están (o estarán) los archivos de tu juego. Heavenfall los lee desde ahí y guarda en la misma carpeta el código del juego.</string>
+    <string name="hf_help_game">Heavenfall se crea a partir de tu propia copia del Monster Hunter 4 Ultimate americano, en un archivo .3ds, .cci o .cxi.</string>
+    <string name="hf_help_update">También necesita la actualización 1.3.0 del juego, en un archivo .cia, del mismo juego americano.</string>
+    <string name="hf_help_xx">Opcional: con tu propia copia de Monster Hunter XX en la misma carpeta, Heavenfall añade aspectos de equipo y materiales raros de ese juego. Puedes saltarte esto.</string>
+    <string name="hf_help_where">Copia el archivo a la carpeta del juego con un cable USB o un administrador de archivos y toca Comprobar de nuevo.</string>
+    <string name="hf_help_decrypt">Una copia descifrada es una que cualquier programa puede leer. Hazla con tu propio juego en tu 3DS con GodMode9: una copia cifrada no sirve.</string>
+    <string name="hf_folder_title">Elige la carpeta del juego</string>
+    <string name="hf_folder_here">Hay un archivo del juego en esta carpeta.</string>
+    <string name="hf_folder_look">Entra en la carpeta donde están los archivos de tu juego.</string>
+    <string name="hf_toast_folder_failed">No se pudo guardar la carpeta.</string>
+
+    <!-- Las pantallas: Más -->
+    <string name="hf_more_title">Más</string>
+    <string name="hf_more_unavailable">No disponible ahora</string>
+    <string name="hf_btn_back">Atrás</string>
+    <string name="hf_btn_continue">Continuar</string>
+    <string name="hf_lang_title">Idioma</string>
+    <string name="hf_lang_auto">El idioma del móvil</string>
+    <string name="hf_lang_en">English</string>
+    <string name="hf_lang_es">Español</string>
+    <string name="hf_confirm_reinstall_title">¿Reinstalar el mod?</string>
+    <string name="hf_confirm_reinstall_text">El mod se descarga otra vez y se hace con tu juego, aunque esté al día. Tus partidas no se tocan.</string>
+    <string name="hf_confirm_rebuild_title">¿Construir de nuevo el código del juego?</string>
+    <string name="hf_confirm_rebuild_text">El código del juego se construye otra vez en este móvil. Tarda mucho: deja el móvil enchufado.</string>
+    <string name="hf_xx_what">Con tu propia copia de Monster Hunter XX, Heavenfall añade aspectos de equipo y materiales raros de ese juego.</string>
+    <string name="hf_xx_where">Copia el juego descifrado (un archivo .3ds, .cci o .cxi) a la carpeta del juego y vuelve aquí.</string>
+    <string name="hf_xx_state_found">MH XX está en la carpeta del juego.</string>
+    <string name="hf_xx_state_in_use">MH XX forma parte de tu Heavenfall.</string>
+    <string name="hf_xx_advice_update">Se añade en la próxima actualización.</string>
 </resources>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- the views of the launcher's screens that the tests through adb look for (uiautomator's resource-id) -->
+    <item name="hf_title" type="id" />
+    <item name="hf_versions" type="id" />
+    <item name="hf_state" type="id" />
+    <item name="hf_failure_reason" type="id" />
+    <item name="hf_failure_advice" type="id" />
+    <item name="hf_blocks" type="id" />
+    <item name="hf_notes" type="id" />
+    <item name="hf_job_step" type="id" />
+    <item name="hf_bar" type="id" />
+    <item name="hf_job_time" type="id" />
+    <item name="hf_job_hint" type="id" />
+    <item name="hf_main" type="id" />
+    <item name="hf_play" type="id" />
+    <item name="hf_cancel" type="id" />
+    <item name="hf_more" type="id" />
+    <item name="hf_steps" type="id" />
+    <item name="hf_step_title" type="id" />
+    <item name="hf_step_problem" type="id" />
+    <item name="hf_step_advice" type="id" />
+    <item name="hf_step_help" type="id" />
+    <item name="hf_step_action" type="id" />
+    <item name="hf_check_again" type="id" />
+    <item name="hf_leave" type="id" />
+    <item name="hf_more_list" type="id" />
+    <item name="hf_back" type="id" />
+    <item name="hf_xx_what" type="id" />
+    <item name="hf_xx_where" type="id" />
+    <item name="hf_xx_state" type="id" />
+    <item name="hf_xx_advice" type="id" />
+</resources>
