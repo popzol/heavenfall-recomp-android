@@ -5,3 +5,4 @@ local.properties
 keystore.properties
 *.keystore
 app/src/main/jniLibs/
+.cxx/

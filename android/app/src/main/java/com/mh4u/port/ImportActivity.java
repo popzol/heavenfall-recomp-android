@@ -408,7 +408,9 @@ public class ImportActivity extends Activity {
             }
             Set<String> fromGame = gameFolderMods();
             String base = name;
-            for (int i = 2; fromGame.contains(name) || name.equalsIgnoreCase(TITLE); i++) name = base + " (" + i + ")";
+            // (heavenfall: nor the launcher's mod's name, which an import would delete and replace)
+            for (int i = 2; fromGame.contains(name) || name.equalsIgnoreCase(TITLE)
+                    || io.github.popzol.heavenfall.LauncherMod.isReserved(name); i++) name = base + " (" + i + ")";
             boolean code = changesCode(root);
             File to = new File(mods, name);
             delete(to);  // (the same mod again: the new copy replaces it, its place and state kept)

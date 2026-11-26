@@ -689,6 +689,10 @@ public class GameFolderActivity extends Activity {
             File[] old = any ? null : to.listFiles(File::isDirectory);
             if (old != null) for (File f : old) if (!f.getName().startsWith(".")) before.put(f.getName(), "");
         }
+        // BEGIN heavenfall: the launcher's mod (load/mods/Heavenfall, made by the app from its patch set) is never in this
+        // list, so what is gone from the game folder never removes it and what is there never replaces it
+        before.keySet().removeIf(io.github.popzol.heavenfall.LauncherMod::isReserved);
+        // END heavenfall
         // what is there now: name -> the folder to copy
         Map<String, File> now = new LinkedHashMap<>();
         java.util.Set<String> bare = new java.util.HashSet<>();  // (the game's own folders: copied into a romfs/)
@@ -697,6 +701,12 @@ public class GameFolderActivity extends Activity {
         if (kids != null) {
             Arrays.sort(kids);
             File title = titleIn(from);
+            // BEGIN heavenfall: the launcher's mod is the only code mod: one from the game folder would load beside it
+            if (title != null && io.github.popzol.heavenfall.LauncherMod.carriesCode(title)) {
+                android.util.Log.w("MH4U", "mods: " + title.getName() + " changes the code: not copied (the launcher's mod is the only code mod)");
+                title = null;
+            }
+            // END heavenfall
             if (title != null) {
                 now.put(modTitle(), title);
                 if (!modTitle().equals(MOD_TITLE) || !title.equals(titleIn(from, MOD_TITLE))) deeper.add(modTitle());
@@ -707,6 +717,15 @@ public class GameFolderActivity extends Activity {
                 if (src == null) src = modRootIn(k, 0);
                 if (src == null && (src = gameFoldersIn(k, 0)) != null) bare.add(k.getName());
                 if (src == null) continue;
+                // BEGIN heavenfall: not the launcher's name, and no code (see above)
+                if (io.github.popzol.heavenfall.LauncherMod.isReserved(k.getName())
+                        || io.github.popzol.heavenfall.LauncherMod.carriesCode(src)
+                        || io.github.popzol.heavenfall.LauncherMod.carriesCode(k)) {
+                    android.util.Log.w("MH4U", "mods: " + k.getName() + " not copied (the name is the launcher's, or it changes the code)");
+                    bare.remove(k.getName());
+                    continue;
+                }
+                // END heavenfall
                 now.put(k.getName(), src);
                 // (0.1.9.3's two ways: the USA title's folder in it, else romfs/, romfs_ext/ or exefs/ right in it)
                 File before193 = titleIn(k, MOD_TITLE);
