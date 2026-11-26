@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Inicio: la línea de estado -->
+    <string name="hf_state_working">Trabajando…</string>
+    <string name="hf_state_half_done">Una actualización se detuvo antes de terminar</string>
+    <string name="hf_state_not_installed">Heavenfall aún no está instalado</string>
+    <string name="hf_state_update_available">Ya está disponible la versión %1$s</string>
+    <string name="hf_state_app_update">Hay una versión nueva de la app: %1$s</string>
+    <string name="hf_state_xx_found">MH XX encontrado: se puede añadir a Heavenfall</string>
+    <string name="hf_state_build_needed">El código del juego se tiene que construir en este móvil</string>
+    <string name="hf_state_rebuild_other_tools">El código del juego lo hicieron otras herramientas (%1$s) y hay que construirlo de nuevo</string>
+    <string name="hf_state_rebuild_other_tools_noid">El código del juego lo hicieron otras herramientas y hay que construirlo de nuevo</string>
+    <string name="hf_state_rebuild_other_mod">El código del juego no coincide con el mod instalado y hay que construirlo de nuevo</string>
+    <string name="hf_state_up_to_date">Todo al día</string>
+    <string name="hf_state_offline">No se pudo buscar actualizaciones. Aun así puedes jugar.</string>
+    <string name="hf_state_checking">Buscando actualizaciones…</string>
+
+    <!-- Inicio: el botón principal -->
+    <string name="hf_btn_set_up">Preparar</string>
+    <string name="hf_btn_install">Instalar</string>
+    <string name="hf_btn_update_to">Actualizar a %1$s</string>
+    <string name="hf_btn_build">Construir</string>
+    <string name="hf_btn_resume">Continuar</string>
+    <string name="hf_btn_play">Jugar</string>
+
+    <!-- Inicio: Más -->
+    <string name="hf_more_game_folder">Carpeta del juego</string>
+    <string name="hf_more_mh_xx">MH XX</string>
+    <string name="hf_more_reinstall">Reinstalar el mod</string>
+    <string name="hf_more_rebuild">Construir de nuevo el código del juego</string>
+    <string name="hf_more_language">Idioma</string>
+    <string name="hf_more_credits">Créditos y licencias</string>
+    <string name="hf_more_share_log">Compartir el registro</string>
+
+    <!-- La lista de preparación -->
+    <string name="hf_check_permission">Acceso a tus archivos</string>
+    <string name="hf_check_folder">Carpeta del juego</string>
+    <string name="hf_check_game">Monster Hunter 4 Ultimate (USA)</string>
+    <string name="hf_check_update">La actualización 1.3.0</string>
+    <string name="hf_check_xx">Monster Hunter XX (opcional)</string>
+
+    <string name="hf_problem_permission">Heavenfall todavía no puede leer tus archivos</string>
+    <string name="hf_advice_permission">Permite el acceso a todos los archivos para Heavenfall cuando Android te lo pida.</string>
+    <string name="hf_problem_folder">No has elegido la carpeta del juego</string>
+    <string name="hf_advice_folder">Elige la carpeta donde tienes los archivos de tu Monster Hunter 4 Ultimate.</string>
+
+    <string name="hf_problem_game_missing">No se encontró Monster Hunter 4 Ultimate</string>
+    <string name="hf_advice_game_missing">Copia en la carpeta tu propio juego americano descifrado (.3ds, .cci o .cxi).</string>
+    <string name="hf_problem_game_encrypted">Tu copia del juego está cifrada</string>
+    <string name="hf_advice_game_encrypted">Vuelve a volcar el juego como una copia descifrada.</string>
+    <string name="hf_problem_game_region">Esta copia del juego no es la americana</string>
+    <string name="hf_advice_game_region">Heavenfall necesita el Monster Hunter 4 Ultimate americano.</string>
+    <string name="hf_problem_game_version">Esto no es Monster Hunter 4 Ultimate</string>
+    <string name="hf_advice_game_version">Elige el Monster Hunter 4 Ultimate americano.</string>
+
+    <string name="hf_problem_update_missing">No se encontró la actualización 1.3.0</string>
+    <string name="hf_advice_update_missing">Copia en la carpeta la actualización 1.3.0 del juego (.cia, descifrada).</string>
+    <string name="hf_problem_update_encrypted">Tu copia de la actualización está cifrada</string>
+    <string name="hf_advice_update_encrypted">Vuelve a volcar la actualización como una copia descifrada.</string>
+    <string name="hf_problem_update_region">Esta actualización no es la americana</string>
+    <string name="hf_advice_update_region">Usa la actualización del juego americano.</string>
+    <string name="hf_problem_update_version">Esta no es la actualización 1.3.0</string>
+    <string name="hf_advice_update_version">Usa la versión 1.3.0 de la actualización.</string>
+
+    <string name="hf_problem_xx_missing">No has copiado MH XX</string>
+    <string name="hf_advice_xx_missing">Opcional: copia tu propio Monster Hunter XX descifrado para añadir su contenido.</string>
+    <string name="hf_problem_xx_encrypted">Tu copia de MH XX está cifrada</string>
+    <string name="hf_advice_xx_encrypted">Vuelve a volcarla como una copia descifrada.</string>
+    <string name="hf_problem_xx_region">Esta copia de MH XX es de otra región</string>
+    <string name="hf_advice_xx_region">Usa una copia descifrada de la versión que admite Heavenfall.</string>
+    <string name="hf_problem_xx_version">Esta copia de MH XX no se puede usar</string>
+    <string name="hf_advice_xx_version">Usa una copia descifrada de la versión que admite Heavenfall.</string>
+
+    <!-- Lo que frena un botón -->
+    <string name="hf_block_checking">Buscando actualizaciones…</string>
+    <string name="hf_advice_wait">Espera un momento y vuelve a intentarlo.</string>
+    <string name="hf_block_no_network">No hay conexión a internet</string>
+    <string name="hf_advice_connect">Conéctate a internet y vuelve a intentarlo.</string>
+    <string name="hf_block_space">No hay espacio libre suficiente: hacen falta %1$s MB y hay %2$s MB</string>
+    <string name="hf_advice_space">Libera espacio en el móvil y vuelve a intentarlo.</string>
+    <string name="hf_block_battery">La batería está al %1$s%%</string>
+    <string name="hf_advice_battery">Conecta el móvil al cargador antes de seguir: esto tarda mucho.</string>
+    <string name="hf_block_memory">Solo quedan %1$s MB de memoria libre</string>
+    <string name="hf_advice_memory">Cierra otras apps y vuelve a intentarlo.</string>
+
+    <!-- Una versión que no se aceptó -->
+    <string name="hf_refusal_bad_answer">La respuesta de GitHub no es una versión publicada</string>
+    <string name="hf_refusal_bad_tag">El número de versión no es válido</string>
+    <string name="hf_refusal_no_size">Un archivo de la versión no indica su tamaño</string>
+    <string name="hf_refusal_no_digest">Un archivo de la versión no trae su suma de comprobación</string>
+    <string name="hf_refusal_bad_url">Un archivo de la versión no está en la página del propio proyecto</string>
+    <string name="hf_refusal_duplicate">La versión lista el mismo archivo dos veces</string>
+    <string name="hf_refusal_missing">La versión no trae un archivo que Heavenfall necesita</string>
+    <string name="hf_refusal_no_release">Todavía no hay ninguna versión a la que actualizar</string>
+    <string name="hf_refusal_no_set">Esta versión no trae un mod para tu juego</string>
+    <string name="hf_refusal_no_shared">A esta versión le falta un archivo que el mod necesita</string>
+    <string name="hf_refusal_needs_newer_app">Este mod necesita una versión más nueva de la app</string>
+    <string name="hf_advice_try_later">Inténtalo de nuevo más tarde. No se cambió nada.</string>
+    <string name="hf_advice_update_app">Actualiza primero la app.</string>
+
+    <!-- Los pasos de una actualización, junto a la barra -->
+    <string name="hf_step_app">Actualizando la app</string>
+    <string name="hf_step_set">Descargando el mod</string>
+    <string name="hf_step_shared">Descargando los archivos compartidos</string>
+    <string name="hf_step_apply">Creando el mod</string>
+    <string name="hf_step_build">Construyendo el código del juego</string>
+</resources>
