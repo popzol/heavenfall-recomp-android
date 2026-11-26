@@ -92,6 +92,11 @@ public final class UpdateService extends Service {
     public static boolean start(Context context, UpdateRequest request) {
         synchronized (UpdateService.class) {
             if (running()) return false;
+            if (io.github.popzol.heavenfall.GameOpen.isOpen()) {
+                // (Home blocks its buttons while the game is open; this stops any other way in, More's included)
+                publish(failed(new UpdateException(UpdateFailure.GAME_OPEN, "start")));
+                return false;
+            }
             try {
                 request.save();
             } catch (UpdateException e) {

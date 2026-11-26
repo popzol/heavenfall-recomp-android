@@ -78,6 +78,7 @@ public final class PhoneReader {
         f.charging = conditions.charging();
         f.job = PhoneFacts.effectiveJob(UpdateService.running() ? HomeModel.Job.RUNNING : HomeModel.Job.NONE,
                 UpdateService.jobState(c));
+        f.gameOpen = io.github.popzol.heavenfall.GameOpen.isOpen();
         return f;
     }
 

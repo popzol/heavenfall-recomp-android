@@ -17,6 +17,8 @@ public enum UpdateFailure {
     CANCELLED("hf_fail_cancelled", "hf_advice_resume"),
     INTERRUPTED("hf_fail_interrupted", "hf_advice_resume"),
     UNEXPECTED("hf_fail_unexpected", "hf_advice_resume"),
+    /** The game is open in its own task: no job starts until it is closed ({@link GameOpen}). */
+    GAME_OPEN("hf_fail_game_open", "hf_advice_close_game"),
     // the app's own update
     SELF_UNREADABLE("hf_fail_self_unreadable", "hf_advice_download_again"),
     SELF_OTHER_APP("hf_fail_self_other_app", "hf_advice_download_again"),

@@ -90,6 +90,8 @@ public final class HomeModel {
         public long objectCacheBytes;
         public boolean charging;
         public Job job = Job.NONE;
+        /** The game is open in its own task ({@link GameOpen}): no job may start until it is closed. */
+        public boolean gameOpen;
     }
 
     /** A reason with what to do about it. */
@@ -197,7 +199,10 @@ public final class HomeModel {
             out.button = new Text("hf_btn_resume");
             out.state = new Text("hf_state_half_done");
             out.includesBuild = true;
-            out.enabled = true;
+            List<Block> blocks = new ArrayList<>();
+            addGameOpen(in, blocks);
+            out.blocks = blocks;
+            out.enabled = blocks.isEmpty();
             out.canPlay = installed != null && in.library == Library.GOOD;
             out.canDiscard = true;
             return out;
@@ -323,6 +328,14 @@ public final class HomeModel {
 
     // ---- what stops a heavy button ----
 
+    /**
+     * A job replaces the mod's files and the library, and the app's own update replaces the app: none starts while the
+     * game is open in its own task (the player switched to Home from it). The game being open never blocks Play.
+     */
+    private static void addGameOpen(Input in, List<Block> blocks) {
+        if (in.gameOpen) blocks.add(new Block(new Text("hf_fail_game_open"), new Text("hf_advice_close_game")));
+    }
+
     private static void addNetwork(Input in, List<Block> blocks) {
         if (in.latestMod != null) return;
         if (in.checking) blocks.add(new Block(new Text("hf_block_checking"), new Text("hf_advice_wait")));
@@ -337,6 +350,7 @@ public final class HomeModel {
      */
     private List<Block> heavy(Input in, boolean downloads, boolean build) {
         List<Block> blocks = new ArrayList<>();
+        addGameOpen(in, blocks);
         long need = downloads ? tuning.minFreeDownloadBytes() : 0;
         if (build) need = Math.max(need, needs.freeBytesNeeded(needs.roomBytes(in.builderWorkBytes, in.objectCacheBytes)));
         if (in.freeBytes >= 0 && need > 0 && in.freeBytes < need) {

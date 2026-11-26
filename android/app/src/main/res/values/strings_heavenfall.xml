@@ -130,6 +130,7 @@
     <string name="hf_fail_cancelled">The update was cancelled</string>
     <string name="hf_fail_interrupted">Android stopped the update</string>
     <string name="hf_fail_unexpected">The update stopped because of an unexpected error</string>
+    <string name="hf_fail_game_open">The game is open</string>
     <string name="hf_fail_self_unreadable">The downloaded app could not be read</string>
     <string name="hf_fail_self_other_app">The downloaded file is not Heavenfall</string>
     <string name="hf_fail_self_not_newer">The downloaded app is not newer than this one</string>
@@ -158,6 +159,7 @@
     <string name="hf_fail_build_failed">The game\'s code could not be built</string>
     <string name="hf_advice_resume">Try again: it goes on from where it stopped.</string>
     <string name="hf_advice_leave_the_app">Press Update again and leave the app when it asks.</string>
+    <string name="hf_advice_close_game">Close the game first, then come back here.</string>
     <string name="hf_advice_download_again">The file was not used. Try again to download it.</string>
     <string name="hf_advice_other_signer">Install Heavenfall again from its official page: this copy came from another source.</string>
     <string name="hf_advice_allow_installs">Allow Heavenfall to install apps in Android\'s settings, then try again.</string>

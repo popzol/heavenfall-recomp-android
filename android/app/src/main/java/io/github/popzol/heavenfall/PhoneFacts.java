@@ -29,6 +29,8 @@ public final class PhoneFacts {
     public boolean charging;
     public HomeModel.Job job = HomeModel.Job.NONE;
     public String appVersion = "";
+    /** The game is open in its own task ({@link GameOpen}). */
+    public boolean gameOpen;
 
     public HomeModel.Storage storage() {
         if (!permission) return HomeModel.Storage.NO_PERMISSION;
@@ -70,6 +72,7 @@ public final class PhoneFacts {
         in.batteryPercent = batteryPercent;
         in.charging = charging;
         in.job = job;
+        in.gameOpen = gameOpen;
     }
 
     /**

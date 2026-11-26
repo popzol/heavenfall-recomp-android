@@ -206,6 +206,39 @@ public class HomeModelTest {
         assertFalse("charging lifts the battery rule", blocked(run(in), "hf_block_battery"));
     }
 
+    /**
+     * Catches a job started while the game is open in its own task (the player switched to Home from it): the job
+     * replaces the mod's files and the library, and the app's own install would stop the hunt. Every button that
+     * starts a job is blocked, named, until the game is closed.
+     */
+    @Test
+    public void anOpenGameBlocksEveryJob() {
+        HomeModel.Input update = good();
+        update.latestMod = "v0.2.4";
+        HomeModel.Input install = good();
+        install.installed = null;
+        HomeModel.Input build = good();
+        build.library = Library.NONE;
+        HomeModel.Input reinstall = good();
+        reinstall.modCode = HomeModel.ModCode.CHANGED;
+        HomeModel.Input resume = good();
+        resume.job = Job.HALF_DONE;
+        Action[] actions = {Action.UPDATE, Action.INSTALL, Action.BUILD, Action.REINSTALL, Action.RESUME};
+        HomeModel.Input[] inputs = {update, install, build, reinstall, resume};
+        for (int i = 0; i < inputs.length; i++) {
+            assertTrue(actions[i] + " with the game closed", run(inputs[i]).enabled);
+            inputs[i].gameOpen = true;
+            HomeModel.Output out = run(inputs[i]);
+            assertEquals(actions[i], out.action);
+            assertFalse(actions[i] + " with the game open", out.enabled);
+            assertTrue(actions[i] + " names the open game", blocked(out, "hf_fail_game_open"));
+            assertEquals("hf_advice_close_game", out.blocks.get(0).advice.key);
+        }
+        HomeModel.Input playing = good();
+        playing.gameOpen = true;
+        assertTrue("Play is never blocked by the game being open", run(playing).enabled);
+    }
+
     /** Offline: the first install cannot start (named), and while the check runs it says so. */
     @Test
     public void installOfflineAndChecking() {
