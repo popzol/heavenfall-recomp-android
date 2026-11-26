@@ -64,6 +64,45 @@ def test_a_compile_that_stops_once_with_no_message_is_tried_again(fake_cc, capfd
     assert any("exit 1" in line for line in out)
 
 
+def test_the_retry_runs_in_a_fresh_process_when_one_is_given(fake_cc, capfd, tmp_path, monkeypatch):
+    """Catches the retry run in the process that made the translation: there the last link was stopped by SIGABRT
+    with no message three times out of three on the test phone (B168), and a fresh run (the app's Resume) went
+    through every time. The retry goes to `again` (run_again_fresh in the app), never back to run."""
+    monkeypatch.delenv(phone_build.AGAIN_ENV, raising=False)
+    tap, errors, failures = phone_build.Stages(), phone_build.Tail(), phone_build.Failures()
+    tap.stage = "compile"
+    calls: list[list[str]] = []
+    fresh: list[list[str]] = []
+    with failures.watching():
+        phone_build.build_with_retry(a_build(fake_cc, calls), ["--dump", "x"], tap, errors, failures,
+                                     str(tmp_path / "zig-cache"), again=lambda cmd: fresh.append(list(cmd)))
+    assert calls == [["--dump", "x"]]
+    assert fresh == [["--dump", "x", "--compile-only"]]
+    assert any("in a fresh process" in line for line in lines_of(capfd))
+
+
+def test_the_fresh_process_of_a_retry_never_retries(tmp_path, monkeypatch):
+    monkeypatch.setenv(phone_build.AGAIN_ENV, "1")
+    tap, errors, failures = phone_build.Stages(), phone_build.Tail(), phone_build.Failures()
+    tap.stage = "compile"
+    fresh: list[list[str]] = []
+
+    def stops(cmd):
+        raise SystemExit("")
+    with pytest.raises(SystemExit):
+        phone_build.build_with_retry(stops, [], tap, errors, failures, str(tmp_path / "zig-cache"),
+                                     again=lambda cmd: fresh.append(cmd))
+    assert fresh == []
+
+
+def test_the_fresh_run_is_this_builder_with_the_same_arguments():
+    argv = ["--update", "u.cia", "--work", "w", "--clean"]
+    again = phone_build.again_argv(argv)
+    assert again[0] == sys.executable and again[1] == "-u"
+    assert os.path.samefile(again[2], phone_build.__file__)
+    assert again[3:] == argv
+
+
 def test_a_failure_that_repeats_goes_out_as_it_did_after_one_more_try(fake_cc, tmp_path):
     tap, errors, failures = phone_build.Stages(), phone_build.Tail(), phone_build.Failures()
     tap.stage = "compile"

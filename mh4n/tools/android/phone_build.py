@@ -343,16 +343,42 @@ def stop_report(stage: str, message: str, tail: str, failures: Failures) -> list
     return lines
 
 
-def build_with_retry(run, cmd: list[str], tap: Stages, errors: Tail, failures: Failures, zig_cache: str):
+AGAIN_ENV = "HEAVENFALL_BUILD_AGAIN"   # (set in the fresh process of a retry: it never retries again)
+
+
+def again_argv(argv: list[str]) -> list[str]:
+    """The command of this builder run again from the start, in a fresh process, with the same arguments (unbuffered,
+    as the app starts it: BuilderService)."""
+    return [sys.executable, "-u", os.path.abspath(__file__), *argv]
+
+
+def run_again_fresh(argv: list[str]):
+    """The retry of a compile-stage stop, as the app's Resume does it: this process is replaced by a fresh run of the
+    builder with the same arguments (the same pid and output, so the app reads on), which keeps the translation and
+    goes straight to the compile. Run in the process that made the translation, the last link was stopped by SIGABRT
+    with nothing on its stderr three times out of three (B168); in a fresh process it went through every time, with
+    less memory available."""
+    def again(_cmd):
+        sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.environ[AGAIN_ENV] = "1"
+        os.execv(sys.executable, again_argv(argv))
+    return again
+
+
+def build_with_retry(run, cmd: list[str], tap: Stages, errors: Tail, failures: Failures, zig_cache: str,
+                     again=None):
     """run(cmd) (build_game.main); a stop in the compile stage is tried once more, with --compile-only (the translation
-    is kept and the objects' cache gives back what was made), after saying what is known of it. A stop that repeats
-    goes on as it is. Zig's cache with an object gone that its record still names (a Galaxy S25 Ultra, after some
-    seventy cuts of one build by the heat rule: a compile of the same C again fails with "cannot open
+    is kept and the objects' cache gives back what was made), after saying what is known of it: by again(cmd) when
+    given (run_again_fresh: a fresh process), else by run. A stop that repeats goes on as it is, and so does a stop in
+    the fresh process of a retry. Zig's cache with an object gone that its record still names (a Galaxy S25 Ultra,
+    after some seventy cuts of one build by the heat rule: a compile of the same C again fails with "cannot open
     .../zig-cache/o/.../X.o") is emptied first: the cache only saves compiling the same C twice."""
     try:
         return run(cmd)
     except SystemExit as e:
-        if e.code in (0, None) or tap.stage != "compile":
+        if e.code in (0, None) or tap.stage != "compile" or os.environ.get(AGAIN_ENV):
             raise
         message = e.code if isinstance(e.code, str) else f"stopped with code {e.code}"
         for line in stop_report(tap.stage, message, errors.text, failures):
@@ -360,9 +386,10 @@ def build_with_retry(run, cmd: list[str], tap: Stages, errors: Tail, failures: F
         if "zig-cache" in errors.text and os.path.isdir(zig_cache):
             print("Zig's cache names a file it no longer has: emptied")
             shutil.rmtree(zig_cache, ignore_errors=True)
-        print("the compile goes on once more (the translation is kept, the objects made are in the cache)")
+        print("the compile goes on once more (the translation is kept, the objects made are in the cache)"
+              + (", in a fresh process" if again else ""))
         errors.text = ""
-        return run(cmd if "--compile-only" in cmd else cmd + ["--compile-only"])
+        return (again or run)(cmd if "--compile-only" in cmd else cmd + ["--compile-only"])
 
 
 def whole_object(path: str) -> bool:
@@ -789,7 +816,8 @@ def main(argv=None) -> int:
         try:
             sys.stderr = errors
             with failures.watching():
-                build_with_retry(build_game.main, cmd, tap, errors, failures, os.path.join(args.work, "zig-cache"))
+                build_with_retry(build_game.main, cmd, tap, errors, failures, os.path.join(args.work, "zig-cache"),
+                                 again=run_again_fresh(sys.argv[1:] if argv is None else list(argv)))
         finally:
             progress.stop.set()
             sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
