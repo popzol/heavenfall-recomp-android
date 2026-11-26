@@ -34,13 +34,13 @@ public final class SetInfo {
         edition = kv.string("edition");
         version = kv.string("version");
         needsXx = kv.flag("xx");
-        xxTitleId = kv.string("xx_title");
+        xxTitleId = TitleIds.normalize(kv.string("xx_title"));
         xxRomfsSha256 = kv.hash("xx_romfs_sha256");
         needsShared = kv.flag("shared");
         sharedSize = kv.longValue("shared_size");
         sharedSha256 = kv.hash("shared_sha256");
         needsUpdate = kv.flag("update");
-        updateTitleId = kv.string("update_title");
+        updateTitleId = TitleIds.normalize(kv.string("update_title"));
         updateExefsSha256 = kv.hash("update_exefs_sha256");
         files = kv.integer("files");
     }
