@@ -38,8 +38,6 @@ final class BuilderText {
             return es ? "En pausa: el teléfono está muy caliente" + battery + ". Sigue solo cuando se enfríe."
                       : "Paused: the phone is too hot" + battery + ". It goes on by itself when it cools down.";
         }
-        if (j.status.equals("warm"))
-            return (es ? "Más despacio: el teléfono está caliente. " : "Slower: the phone is warm. ") + now(j, es);
         if (j.status.equals("paused-battery"))
             return es ? "En pausa: queda poca batería. Conecta el cargador." : "Paused: the battery is low. Plug in the charger.";
         return now(j, es);

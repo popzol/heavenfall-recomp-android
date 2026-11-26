@@ -16,6 +16,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.util.Log;
 
 import java.io.BufferedReader;
@@ -32,16 +33,22 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import io.github.popzol.heavenfall.HeatRule;
+import io.github.popzol.heavenfall.app.Config;
+
 /**
  * Builds the game's code library on the phone (BuilderActivity starts it): the tools first (BuilderTools), then mh4n's
  * tools/android/phone_build.py, the PC pipeline itself (tools/build_game.py --native --android), run by the downloaded
  * CPython through the app's launchers (app_native/builder/toolrun.c). A foreground service with a notification and a
  * partial wake lock: it goes on with the screen off or another app in front.
  *
- * Heat and battery (watchHeat): while the phone is warm (thermal status moderate) only two compilers run; severe or
- * worse, or the battery at 15 % or less and not charging, the build waits (SIGSTOP to its processes) and goes on when the
- * phone has cooled down to light (or is charging). A thermal status the battery's temperature and the thermal headroom
- * both contradict (a cool phone) is taken as a wrong reading, and a battery at 47 degrees pauses it whatever the status.
+ * Heat and battery (watchHeat, the rule HeatRule with the table of tuning.json's "heat"): the thermal status and the
+ * battery's temperature each allow a share of the compilers (all up to moderate and under 40 degrees, then 75, 50 and 25 %
+ * by the battery, half at severe), the stricter wins, and the others wait (SIGSTOP), the oldest compiles going on; from
+ * critical, or the battery at 47 degrees, the whole build waits (and from 15 % of battery or less, not charging, until it
+ * charges). It steps down at once and up one level at a time, after 30 s below the threshold. A thermal status the
+ * battery's temperature and the thermal headroom both contradict (a cool phone) is taken as a wrong reading, moderate.
+ * The player sees only the pauses: a build with fewer compilers shows its normal progress.
  * A build that says nothing for a minute gets a line in its log each minute with what its processes are doing (quiet).
  * Cancelled, closed by Android or cut by a reboot, it keeps its work folder: the next run goes on
  * from the objects already compiled (phone_build.py).
@@ -64,7 +71,7 @@ public class BuilderService extends Service {
 
     /** What a run is doing, for the screen and the notification. */
     static final class Job {
-        volatile String status = "idle";  // idle, running, warm, paused-hot, paused-battery, done, failed, cancelled
+        volatile String status = "idle";  // idle, running, paused-hot, paused-battery, done, failed, cancelled
         volatile String stage = "tools", detail = "";
         volatile long done, total, started, stageStarted;
         volatile String errorStage = "", errorText = "", library = "";
@@ -72,7 +79,7 @@ public class BuilderService extends Service {
         volatile float batteryC = Float.NaN;  // (the battery's temperature at the last heat check, for the screen)
         volatile long lastLine;  // (when the build last said something: quiet)
         final ArrayDeque<String> tail = new ArrayDeque<>();
-        boolean active() { return status.equals("running") || status.equals("warm") || status.startsWith("paused"); }
+        boolean active() { return status.equals("running") || status.startsWith("paused"); }
     }
 
     static final Job job = new Job();
@@ -478,46 +485,12 @@ public class BuilderService extends Service {
     }
 
     // ---- heat and battery
-    /** While warm (thermal status moderate) at most this many compilers run; the others wait, stopped. */
-    static final int WARM_COMPILERS = 2;
-    /** The battery at this temperature (degrees C) or above: too hot, whatever the thermal status says (a phone that
-     *  reports none, as before Android 10, or one that never raises it); the build goes on below BATTERY_COOLED. */
-    static final float BATTERY_HOT = 47f, BATTERY_COOLED = 42f;
-    /** A thermal status of severe or worse with the battery below BATTERY_COOL and the thermal headroom, where the phone
-     *  gives one, below HEADROOM_HOT, is taken as a wrong reading: some phones report a high status whatever their heat
-     *  (a player's in a freezer paused "too hot", 2026-11-15; an Oppo Reno 3's with its battery at 35 degrees, 1.0.2).
-     *  It counts as warm then: two compilers, the build goes on. A battery under 40 degrees isn't a hot phone; above, the
-     *  status stands, and BATTERY_HOT pauses it anyway. */
-    static final float BATTERY_COOL = 40f, HEADROOM_HOT = 0.85f;
     /** A build that has said nothing for this long gets a line in its log, and one more each time again (quiet). */
     static final long QUIET_MS = 60_000;
 
-    /** A severe or worse thermal status on a phone its battery and headroom say is cool: a wrong reading. */
-    static boolean wrongReading(int status, float headroom, float batteryC) {
-        boolean cool = batteryC < BATTERY_COOL && !(headroom >= HEADROOM_HOT);  // (NaN: false; an unknown headroom agrees)
-        return status >= PowerManager.THERMAL_STATUS_SEVERE && cool;
-    }
-
-    /**
-     * The heat rule (watchHeat): what the build is to be, from what it was and one reading. Light or cooler: running.
-     * Moderate ("warm"): only WARM_COMPILERS compilers run, the others stopped until it cools to none. Severe or worse:
-     * the whole build waits until the phone is back to light, unless the battery and the headroom say it is cool (a
-     * wrong reading, taken as warm; a paused build goes on then too); the battery at BATTERY_HOT or above waits too,
-     * until below BATTERY_COOLED. 15 % of battery or less, not charging: it waits until it charges (or passes 20 %).
-     */
-    static String heatState(String was, int status, float headroom, float batteryC, int level, boolean charging) {
-        boolean cool = batteryC < BATTERY_COOL && !(headroom >= HEADROOM_HOT);
-        int thermal = wrongReading(status, headroom, batteryC) ? PowerManager.THERMAL_STATUS_MODERATE : status;
-        if (batteryC >= BATTERY_HOT) thermal = Math.max(thermal, PowerManager.THERMAL_STATUS_SEVERE);
-        if (was.equals("paused-hot"))  // (until back to light, or cool by its battery; and the battery below BATTERY_COOLED)
-            return thermal < PowerManager.THERMAL_STATUS_SEVERE && (thermal <= PowerManager.THERMAL_STATUS_LIGHT || cool)
-                    && !(batteryC >= BATTERY_COOLED) ? "running" : was;
-        if (was.equals("paused-battery")) return charging || level > 20 ? "running" : was;
-        if (thermal >= PowerManager.THERMAL_STATUS_SEVERE) return "paused-hot";
-        if (!charging && level <= 15) return "paused-battery";
-        if (thermal == PowerManager.THERMAL_STATUS_MODERATE) return "warm";
-        if (was.equals("warm") && thermal == PowerManager.THERMAL_STATUS_LIGHT) return "warm";  // (until it cools to none)
-        return "running";
+    /** The heat rule, with the table of tuning.json (read once, the first time a build needs it). */
+    private HeatRule heatRule() {
+        return new HeatRule(Config.tuning(this).heat);
     }
 
     /** The battery's temperature in an ACTION_BATTERY_CHANGED intent's tenths of a degree: NaN for none (or the 0 some phones give for none). */
@@ -551,10 +524,12 @@ public class BuilderService extends Service {
 
     /**
      * Every 5 s: the phone's thermal status (PowerManager), its thermal headroom (Android 11 and later, NaN where the phone
-     * doesn't say) and the battery, its level and its temperature, through the heat rule (heatState); every change of
-     * state goes to the build's log with what was read. And a build quiet for QUIET_MS gets a line in its log (quiet).
+     * doesn't say) and the battery, its level and its temperature, through the heat rule (HeatRule); every change of
+     * state or of the share of compilers goes to the build's log with what was read. And a build quiet for QUIET_MS gets
+     * a line in its log (quiet).
      */
     private void watchHeat(OutputStream log) {
+        heatLevel = HeatRule.start();
         // (a check that fails, an exception of the system's, must not leave the build's processes stopped for good, as a
         // paused build's would be with this thread gone: they go on, and the checks start again)
         while (process != null && !Thread.currentThread().isInterrupted()) {
@@ -571,12 +546,17 @@ public class BuilderService extends Service {
                     note();
                     changed();
                 }
+                try { Thread.sleep(5000); } catch (InterruptedException ie) { return; }  // (not a busy loop)
             }
         }
     }
 
+    /** The heat rule's level of the build (the share of the compilers; 0 waits): kept across a restarted check. */
+    private volatile HeatRule.Level heatLevel = HeatRule.start();
+
     private void watchHeatLoop(OutputStream log) {
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        HeatRule rule = heatRule();
         boolean saidWrong = false;
         String saidStage = "";  // (a reading at each stage: heatReading)
         long saidQuiet = 0;
@@ -600,17 +580,21 @@ public class BuilderService extends Service {
                 boolean charging = battery != null && battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0;
                 float batteryC = batteryCelsius(battery == null ? 0 : battery.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0));
                 job.batteryC = batteryC;
-                boolean wrong = wrongReading(status, headroom, batteryC);
+                boolean wrong = HeatRule.wrongReading(status, headroom, batteryC);
                 String reading = "thermal status " + status
                         + (Float.isNaN(headroom) ? "" : String.format(Locale.ROOT, ", headroom %.2f", headroom))
                         + (Float.isNaN(batteryC) ? ", battery temperature unknown" : String.format(Locale.ROOT, ", battery %.1f C", batteryC))
                         + ", battery " + level + "%" + (charging ? ", charging" : "");
                 if (wrong != saidWrong) {
                     saidWrong = wrong;
-                    say(log, wrong ? "heat: " + reading + ": the status is taken as a wrong reading (the phone is cool): it goes on, slower"
+                    say(log, wrong ? "heat: " + reading + ": the status is taken as a wrong reading (the phone is cool): taken as moderate"
                                    : "heat: " + reading + ": the status agrees with the phone's heat again");
                 }
-                String was = job.status, want = heatState(was, status, headroom, batteryC, level, charging);
+                HeatRule.Level before = heatLevel, after = rule.step(before, SystemClock.elapsedRealtime(), status, headroom, batteryC);
+                heatLevel = after;
+                String was = job.status, want = HeatRule.state(was, after.percent, level, charging);
+                if (after.percent != before.percent)
+                    say(log, "heat: " + after.percent + " % of the compilers (" + reading + ")");
                 if (!want.equals(was)) {
                     Log.i(TAG, "builder: " + want + " (" + reading + ")");
                     say(log, "heat: " + want + " (" + reading + ")");
@@ -624,11 +608,19 @@ public class BuilderService extends Service {
                 if (want.startsWith("paused")) {
                     for (int pid : all) android.os.Process.sendSignal(pid, 19);  // SIGSTOP, the parent first
                 } else {
-                    int allowed = want.equals("warm") ? WARM_COMPILERS : Integer.MAX_VALUE, n = 0;
+                    // (the oldest compilers go on, the newest wait: none stays stopped for the whole build)
+                    int[] pids = new int[leaves.size()];
+                    long[] starts = new long[pids.length];
+                    int k = 0;
+                    for (int pid : leaves) {
+                        pids[k] = pid;
+                        starts[k++] = HeatRule.startTime(BuilderTools.readText(new File("/proc/" + pid + "/stat")));
+                    }
+                    int allowed = HeatRule.compilers(after.percent, Math.max(lastJobs, pids.length));
+                    java.util.Set<Integer> run = HeatRule.oldest(pids, starts, allowed);
                     for (int i = all.size() - 1; i >= 0; i--) {  // (the children first)
                         int pid = all.get(i);
-                        boolean leaf = leaves.contains(pid);
-                        android.os.Process.sendSignal(pid, !leaf || n++ < allowed ? 18 : 19);  // SIGCONT / SIGSTOP
+                        android.os.Process.sendSignal(pid, !leaves.contains(pid) || run.contains(pid) ? 18 : 19);  // SIGCONT / SIGSTOP
                     }
                 }
                 long now = System.currentTimeMillis(), quiet = now - job.lastLine;

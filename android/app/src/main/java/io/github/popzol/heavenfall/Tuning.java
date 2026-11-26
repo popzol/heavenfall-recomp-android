@@ -31,6 +31,7 @@ public final class Tuning {
     public final long buildUnitMs;            // a build's time per unit compiled, with its compilers together
     public final long buildAfterCompileSeconds;    // a build's time after the last unit (the link, the install)
     public final long buildUnits;             // the units a whole build compiles
+    public final Heat heat;                   // the compilers a build may run by the phone's heat
 
     private Tuning(JSONObject o) {
         minFreeDownloadMb = range(o, "min_free_download_mb", 1, 1L << 24);
@@ -45,6 +46,55 @@ public final class Tuning {
         buildUnitMs = range(expected, "build_unit_ms", 0, 1L << 24);
         buildAfterCompileSeconds = range(expected, "build_after_compile_s", 0, 1L << 20);
         buildUnits = range(expected, "build_units", 1, 1L << 20);
+        JSONObject h = Json.child(o, "heat");
+        if (h == null) throw new InvalidException("tuning.json: no heat");
+        heat = new Heat(h);
+    }
+
+    /**
+     * The heat table ({@code "heat"}): the share of the compilers (percent, 0 = the build waits) a thermal status allows
+     * ({@code status_percent}, by status 0..n; a higher status takes the last) and a battery temperature allows
+     * ({@code battery_c} / {@code battery_percent}: from that temperature up; below the first, all); the stricter wins.
+     * Stepping up a level needs the battery to have stayed {@code step_up_margin_c} below its threshold (a status one
+     * lower) for {@code step_up_hold_s}; a build that waited for the heat goes on only below {@code battery_resume_c}.
+     */
+    public static final class Heat {
+        public final int[] statusPercent, batteryC, batteryPercent;
+        public final int batteryResumeC, stepUpMarginC, stepUpHoldSeconds;
+
+        private Heat(JSONObject h) {
+            statusPercent = percents(h, "status_percent", 1, 8);
+            batteryPercent = percents(h, "battery_percent", 0, 16);
+            batteryC = list(h, "battery_c", 0, 16, 0, 100);
+            if (batteryC.length != batteryPercent.length)
+                throw new InvalidException("tuning.json: heat battery_c and battery_percent differ in length");
+            for (int i = 1; i < batteryC.length; i++)
+                if (batteryC[i] <= batteryC[i - 1]) throw new InvalidException("tuning.json: heat battery_c is not ascending");
+            batteryResumeC = (int) range(h, "battery_resume_c", 0, 100);
+            stepUpMarginC = (int) range(h, "step_up_margin_c", 0, 20);
+            stepUpHoldSeconds = (int) range(h, "step_up_hold_s", 0, 600);
+        }
+
+        private static int[] percents(JSONObject h, String key, int minLength, int maxLength) {
+            int[] v = list(h, key, minLength, maxLength, 0, 100);
+            for (int i = 1; i < v.length; i++)
+                if (v[i] > v[i - 1]) throw new InvalidException("tuning.json: heat " + key + " rises");
+            return v;
+        }
+
+        private static int[] list(JSONObject h, String key, int minLength, int maxLength, int min, int max) {
+            org.json.JSONArray a = Json.array(h, key);
+            if (a == null || a.length() < minLength || a.length() > maxLength)
+                throw new InvalidException("tuning.json: heat " + key + " is not a list of " + minLength + " to " + maxLength);
+            int[] out = new int[a.length()];
+            for (int i = 0; i < out.length; i++) {
+                Object v = a.opt(i);
+                if (!(v instanceof Integer) || (Integer) v < min || (Integer) v > max)
+                    throw new InvalidException("tuning.json: heat " + key + " has an entry that is not a number in range");
+                out[i] = (Integer) v;
+            }
+            return out;
+        }
     }
 
     private static long positive(JSONObject o, String key) {

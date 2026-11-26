@@ -16,7 +16,7 @@ public final class HeavenfallBridge {
 
     /** The build's state as the update job needs it. */
     public static final class BuildStatus {
-        /** idle, running, warm, paused-hot, paused-battery, done, failed, cancelled. */
+        /** idle, running, paused-hot, paused-battery, done, failed, cancelled. */
         public final String status;
         /** The build's stage: tools, extract, recompile, compile, install. */
         public final String stage;

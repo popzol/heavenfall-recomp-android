@@ -410,10 +410,10 @@ public class BuilderActivity extends Activity {
                           + "desde donde quedó.\n"
                         : "• Time: 15 minutes to 2 hours depending on the phone. It goes on with the screen off and, if it is cut, it "
                           + "goes on from where it stopped.\n");
-            t.append(es ? "• El teléfono se calienta: déjalo cargando, sin funda si puedes. Caliente, va más despacio; muy caliente, "
-                          + "se pausa solo hasta que se enfría."
-                        : "• The phone gets warm: keep it charging, out of its case if you can. Warm, it goes slower; too hot, it "
-                          + "pauses by itself until it cools down.");
+            t.append(es ? "• El teléfono se calienta: déjalo cargando, sin funda si puedes. Si se calienta mucho, usa menos "
+                          + "núcleos para enfriarse y, si sigue subiendo, se pausa solo hasta que se enfría."
+                        : "• The phone gets warm: keep it charging, out of its case if you can. If it gets very warm, it uses "
+                          + "fewer cores to cool down and, if it keeps rising, it pauses by itself until it cools down.");
             detail.setTextColor(Look.CREAM);
             detail.setText(t);
         }
