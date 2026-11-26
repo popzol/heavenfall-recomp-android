@@ -76,7 +76,8 @@ STAMP = "inputs.txt"
 WHOLE = 128 << 20      # a file up to this size is hashed whole (the update: 48 MB, under a second on a phone)...
 END = 1 << 20          # ...a larger one (the game's .3ds: GBs, a minute to read) by its size, its date and its two ends
 SMALL = 64 << 10       # in a mods folder: the files the code mods are made of, and small ones (an order, a switch),
-CODE_NAMES = {"code.bin", "code.ips", "code.bps", "exheader.bin"}  # whole; the rest (romfs) by their sizes
+# whole; the rest (romfs) by their sizes (a mod's packs too: its recomp.json holds their SHA-1, code_mods.MANIFEST)
+CODE_NAMES = {"code.bin", "code.ips", "code.bps", "exheader.bin", "recomp.json"}
 # the tools as the app packs them (its scripts/pack_builder_tools.py: tools/ and config/ without the PC's research)
 TOOL_TOPS = ("tools", "config")
 TOOL_SKIP = {"__pycache__", "ghidra", "native", "harness", "tests"}

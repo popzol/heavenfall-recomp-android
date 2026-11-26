@@ -3,6 +3,7 @@ targets (local label vs tail call), resolve jump tables, and grow the function s
 newly discovered call targets."""
 from __future__ import annotations
 
+import dataclasses
 import re
 import struct
 from dataclasses import dataclass, field
@@ -19,36 +20,61 @@ def is_vmsr_fpscr(ins: Insn) -> bool:
     return ins.mode == "arm" and ins.kind == OP and (ins.word & 0x0FFF0FFF) == 0x0EE10A10
 MAX_INSNS_PER_FUNCTION = 200_000
 MAX_JUMP_TABLE = 4096
+OPEN_TABLE_REACH = 0x10000      # how far from the jump a case of a table with no known bound may be
 
 
 class Image:
     """The program image: `code` holds text|ro|data contiguously from `base`."""
 
     def __init__(self, code: bytes, base: int, text_size: int,
-                 extra_code: list[tuple[int, int]] | None = None):
+                 extra_code: list[tuple[int, int]] | None = None, interpret_outside: bool = False,
+                 regions: list[tuple[int, bytes]] | None = None):
         self.code, self.base, self.text_size = code, base, text_size
         self.text_end = base + text_size
+        # (address, bytes) outside the program that hold code too: a code mod's packs, which its own loader reads
+        # into the heap at run time (code_mods.Pack). Their ranges count as extra_code.
+        self.regions = sorted(regions or [])
         # [start, end) ranges past the text that hold code too: a code mod's new code in the read-only
-        # data (tools/build_game.py finds them from the bytes the mod changes). Only code reached from an
-        # entry point is decoded there, as in the text.
-        self.extra_code = sorted(extra_code or [])
+        # data (tools/build_game.py finds them from the bytes the mod changes), or the code a mod names in
+        # its recomp.json. Only code reached from an entry point is decoded there, as in the text.
+        self.extra_code = sorted((extra_code or []) + [(a, a + len(b)) for a, b in self.regions])
+        # A code mod may put routines elsewhere in the data (a "code cave") and branch to them from its code.
+        # When this is set, a branch or a switch case there is a tail call that runs in the interpreter (as
+        # any address with no recompiled code does) instead of a trap. Off for the game's own code.
+        self.interpret_outside = interpret_outside
 
     def read32(self, a: int) -> int | None:
         off = a - self.base
         if 0 <= off <= len(self.code) - 4 and not a & 3:
             return struct.unpack_from("<I", self.code, off)[0]
-        return None
+        return self._region_read(a, "<I") if self.regions and not a & 3 else None
 
     def read16(self, a: int) -> int | None:
         off = a - self.base
         if 0 <= off <= len(self.code) - 2 and not a & 1:
             return struct.unpack_from("<H", self.code, off)[0]
+        return self._region_read(a, "<H") if self.regions and not a & 1 else None
+
+    def _region_read(self, a: int, fmt: str) -> int | None:
+        size = struct.calcsize(fmt)
+        for start, data in self.regions:
+            if start <= a and a + size <= start + len(data):
+                return struct.unpack_from(fmt, data, a - start)[0]
         return None
 
     def in_text(self, a: int) -> bool:
         if self.base <= a < self.text_end:
             return True
+        return self.in_extra(a)
+
+    def in_extra(self, a: int) -> bool:
         return any(s <= a < e for s, e in self.extra_code)
+
+    def interpreted(self, a: int, mode: str) -> bool:
+        """`a` is code a mod put outside what is recompiled, which the interpreter runs (interpret_outside): an
+        instruction of `mode` in the program's data, outside the text and extra_code."""
+        return (self.interpret_outside and self.base <= a < self.base + len(self.code) and not self.in_text(a)
+                and not a & 1 and not (mode == "arm" and a & 3))
 
 
 @dataclass
@@ -62,6 +88,7 @@ class Function:
     ijump_targets: dict[int, list[int]] = field(default_factory=dict)  # local computed-jump targets
     fall_tail: dict[int, int] = field(default_factory=dict)
     jtabs: dict[int, list[int]] = field(default_factory=dict)
+    open_jtabs: set[int] = field(default_factory=set)      # tables with no known bound (Analyzer.open_table)
     calls: set[tuple[int, str]] = field(default_factory=set)
     problems: list[str] = field(default_factory=list)
     vector_insns: int = 0                                  # instructions run in short-vector mode
@@ -187,10 +214,26 @@ class Analyzer:
         out = []
         for i in range(n):
             t = self.img.read32(ins.jt_base + 4 * i)
-            if t is None or t & 3 or not self.img.in_text(t):
+            if t is None or t & 3 or not (self.img.in_text(t) or self.img.interpreted(t, "arm")):
                 return None
             out.append(t)
         return out
+
+    def open_table(self, ins: Insn) -> list[int] | None:
+        """`ldr pc, [pc, rI, lsl #2]` whose bound no compare gives: a code mod put a call where the game's `cmp`
+        was, and the called code sets the flags. The table is taken as its words that point at code near the
+        jump, up to the first that doesn't (the code after a table is instructions, which are no such
+        addresses); an index past them runs in the interpreter (emit.py), so a table longer than that only
+        costs speed. Only in a build whose code a mod changes (Image.interpret_outside)."""
+        if ins.jt_kind != "ldrpc":
+            return None
+        out = []
+        for i in range(MAX_JUMP_TABLE):
+            t = self.img.read32(ins.jt_base + 4 * i)
+            if t is None or t & 3 or not self.img.in_text(t) or abs(t - ins.addr) > OPEN_TABLE_REACH:
+                break
+            out.append(t)
+        return out or None
 
     # ── one function ─────────────────────────────────────────────────────
     def analyze(self, entry: int, mode: str, entries: dict[int, str]) -> Function:
@@ -238,8 +281,26 @@ class Analyzer:
             else:
                 if vec_at[a] != vec:
                     f.problems.append(f"conflicting VFP vector length at {a:#x}")
+        if mode == "thumb":
+            self._far_jumps(f, entries)
         f.vector_insns = sum(1 for a, v in vec_at.items() if v)
         return f
+
+    @staticmethod
+    def _far_jumps(f: Function, entries: dict[int, str]) -> None:
+        """GCC's Thumb-1 far jumps: Thumb-1 (ARMv6K) has no long `b`, so GCC branches with `bl` inside a large
+        function whose lr is saved (to its own epilogue, for instance). A `bl` whose target is an instruction of this
+        function's decoded body, and no entry point, is such a branch: taken for a call, the target would run as a
+        function of its own, restore the caller's registers and return into the middle of this one. The game's own
+        code (RVCT) has none. (The decoded instruction is shared with every function that has it: this function gets
+        its own copy.)"""
+        for a, ins in list(f.insns.items()):
+            t = ins.target
+            if (ins.kind == BL and not ins.conditional and ins.target_mode == "thumb" and t in f.insns
+                    and t != f.entry and t not in entries and a not in f.mret_calls):
+                f.insns[a] = dataclasses.replace(ins, kind=B)
+                f.labels.add(t)
+                f.calls.discard((t, "thumb"))
 
     def _vmsr_vec(self, ins: Insn, current: int) -> int | None:
         """FPSCR LEN/STRIDE written by `vmsr fpscr, rT`, from the straight-line code that
@@ -400,6 +461,8 @@ class Analyzer:
             return "goto"
         if entries.get(target) == tmode:
             return "tail"
+        if self.img.interpreted(target, tmode):
+            return "tail"       # a mod's code cave: it returns where this function would
         if not self.img.in_text(target) or (tmode == "arm" and target & 3) or target & 1:
             return "bad"
         return "goto"
@@ -476,12 +539,19 @@ class Analyzer:
             return ins.conditional
         if k == JTAB:
             targets = self.jump_table(ins, f)
+            if targets is None and self.img.interpret_outside:
+                targets = self.open_table(ins)
+                if targets is not None:
+                    f.open_jtabs.add(ins.addr)
             if targets is None:
                 f.problems.append(f"unresolved jump table at {ins.addr:#x}")
                 ins.kind, ins.imm, ins.trap_reason = TRAP, 4, "unresolved jump table"
                 return False
             f.jtabs[ins.addr] = targets
             for t in targets:
+                if not self.img.in_text(t):
+                    f.calls.add((t, "arm"))     # a case in a mod's code cave: a tail call (emit.py)
+                    continue
                 f.labels.add(t)
                 work.append(t)
             return ins.conditional

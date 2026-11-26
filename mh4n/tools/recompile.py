@@ -295,6 +295,8 @@ def recompile(img: Image, entries: dict[int, str], out: str, log=print,
             stats["insns"] += len(f.insns)
             stats["traps"] += sum(1 for i in f.insns.values() if i.kind == "trap")
             stats["jump_tables"] += len(f.jtabs)
+            stats["interpreted"] += (sum(not img.in_text(f.insns[t].target) for t in f.tails) +
+                                     sum(not img.in_text(t) for ts in f.jtabs.values() for t in ts))
             problems += [f"{fname(a)}: {p}" for p in f.problems]
         path = os.path.join(src, f"f{bucket << FILE_SHIFT:08x}.c")
         write_if_changed(path, "\n".join(parts) + "\n")
@@ -328,6 +330,10 @@ def recompile(img: Image, entries: dict[int, str], out: str, log=print,
     report = {
         "functions": len(funcs), "discovered": an.discovered, "from_data_pointers": len(extra), "instructions": stats["insns"],
         "trap_instructions": stats["traps"], "jump_tables": stats["jump_tables"],
+        # a code mod's: the functions in its code past the text, and its branches into code left to the interpreter
+        "extra_code_functions": sum(img.in_extra(a) for a in funcs), "interpreted_branches": stats["interpreted"],
+        "pack_functions": sum(any(s <= a < s + len(d) for s, d in img.regions) for a in funcs),
+        "open_jump_tables": sum(len(f.open_jtabs) for f in funcs.values()),
         "problems": len(problems), "c_files": len(files) + 1, "hook_points": len(hook_addrs),
         "tunables": len(tunable_addrs),
         "analysis_s": round(t1 - t0, 1), "emit_s": round(t2 - t1, 1),

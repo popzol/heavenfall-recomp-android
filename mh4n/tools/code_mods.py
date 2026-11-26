@@ -13,6 +13,8 @@ interprets everything. A mod that only changes data (.rodata/.data) needs no reb
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import sys
@@ -289,6 +291,134 @@ def exheader_override(folders: list[str]) -> tuple[str, bytes] | None:
             if len(data) >= EXHEADER_SIZE:
                 return path, data[:EXHEADER_SIZE]
     return None
+
+
+# A code mod with its own exheader may name the code it puts past the game's data in a recomp.json beside its
+# exheader.bin: the ranges that hold it and its functions' starts, which are then recompiled as entry points (a
+# function reached only through a pointer would otherwise run in the interpreter). Not one of Azahar's files.
+# Format 2 adds the mod's "packs": code the mod's own loader reads at run time from a file of its RomFS into the
+# application's heap, at a fixed address (the file is the image, its first byte at that address, whole pages), each
+# with the file's SHA-1 and its functions' starts. Format 1 files stay valid.
+MANIFEST = "recomp.json"
+MANIFEST_FORMATS = (1, 2)
+HEAP = (0x08000000, 0x10000000)     # the application's heap region, where a pack's pages are committed
+PAGE_SIZE = 0x1000
+
+
+@dataclass
+class Pack:
+    file: str                       # its path in the mod's folder (romfs/...)
+    address: int                    # where its first byte runs
+    data: bytes                     # the file: the code and data the loader puts there
+    entries: dict[int, str]         # its functions' starts
+
+
+@dataclass
+class Manifest:
+    path: str
+    ranges: list[tuple[int, int]]   # [start, end) addresses of the mod's code
+    entries: dict[int, str]         # its functions' starts: address -> "arm" | "thumb"
+    packs: list[Pack] = field(default_factory=list)
+
+    def code_ranges(self) -> list[tuple[int, int]]:
+        """Every range that holds the mod's code: its own and its packs'."""
+        return sorted(self.ranges + [(p.address, p.address + len(p.data)) for p in self.packs])
+
+    def all_entries(self) -> dict[int, str]:
+        out = dict(self.entries)
+        for p in self.packs:
+            out.update(p.entries)
+        return out
+
+
+def _entries(pairs, ranges: list[tuple[int, int]], where: str) -> dict[int, str]:
+    """[address, mode] pairs as {address: mode} (Thumb by its mode or an odd address), each an instruction inside
+    `ranges`; ModError otherwise."""
+    entries = {}
+    for a, m in pairs:
+        addr = int(a, 16)
+        entries[addr & ~1] = "thumb" if addr & 1 else m
+    for a, m in sorted(entries.items()):
+        if m not in ("arm", "thumb") or (m == "arm" and a & 3) or not any(s <= a < e for s, e in ranges):
+            raise ModError(f"{MANIFEST}: the entry 0x{a:08X} ({m}) is not an instruction of {where}")
+    return entries
+
+
+def _pack(folder: str, item, taken: list[tuple[int, int]]) -> Pack:
+    """One of a format 2 manifest's packs, read from the mod's folder and checked: its file inside the folder's
+    romfs/ (the game reads it from its RomFS), the SHA-1 it names, whole pages, in the heap and clear of every range in
+    `taken` (to which it is added)."""
+    if not isinstance(item, dict):
+        raise ModError(f"{MANIFEST}: a pack is not a JSON object")
+    name = item["file"]
+    parts = name.replace("\\", "/").split("/") if isinstance(name, str) else [""]
+    if ":" in name or any(p in ("", ".", "..") for p in parts) or parts[0] != "romfs" or len(parts) < 2:
+        raise ModError(f"{MANIFEST}: the pack {name!r} is not a file of the mod's romfs/ folder (its code reads it "
+                       "from the game's RomFS)")
+    address = int(item["address"], 16)
+    try:
+        with open(os.path.join(folder, *parts), "rb") as f:
+            data = f.read()
+    except OSError as e:
+        raise ModError(f"{MANIFEST}: the pack {name} can't be read ({e})") from None
+    if hashlib.sha1(data).hexdigest() != item["sha1"]:
+        raise ModError(f"{MANIFEST}: the pack {name} is not the file it was made with (build the mod again)")
+    end = address + len(data)
+    if not data or address % PAGE_SIZE or len(data) % PAGE_SIZE or not HEAP[0] <= address < end <= HEAP[1]:
+        raise ModError(f"{MANIFEST}: the pack {name} (0x{address:08X}, 0x{len(data):X} bytes) is not whole pages "
+                       "in the heap")
+    if any(s < end and address < e for s, e in taken):
+        raise ModError(f"{MANIFEST}: the pack {name} overlaps other code of the mod")
+    taken.append((address, end))
+    return Pack(name, address, data, _entries(item["entries"], [(address, end)], f"the pack {name}"))
+
+
+def manifest_path(folders: list[str]) -> str | None:
+    """The recomp.json of the mod whose code runs (the last folder with a code replacement, as apply_folders), or
+    None when that mod has none."""
+    for folder in reversed(folders):
+        if _first(folder, REPLACEMENTS):
+            path = os.path.join(folder, MANIFEST)
+            return path if os.path.isfile(path) else None
+    return None
+
+
+def load_manifest(path: str, program_id: int, code: bytes, extension: tuple[int, int] | None) -> Manifest:
+    """`path` read and checked against the code it is for: a JSON object of one of MANIFEST_FORMATS, for this title,
+    made for exactly `code` (the code the mods give: its SHA-1), naming ranges inside `extension` (the mod's code past
+    the game's data, as its exheader maps it) and entries inside those ranges (Thumb by its mode or an odd address);
+    format 2's packs as _pack checks them. Anything else raises ModError saying what."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ModError(f"{MANIFEST} is not a JSON object")
+        if data.get("format") not in MANIFEST_FORMATS:
+            raise ModError(f"{MANIFEST}: format {data.get('format')!r}, these tools read "
+                           + " and ".join(map(str, MANIFEST_FORMATS)))
+        if mod_id(int(data["title"], 16)) != mod_id(program_id):
+            raise ModError(f"{MANIFEST} is for another title ({data['title']})")
+        if data["code_sha1"] != hashlib.sha1(code).hexdigest():
+            raise ModError(f"{MANIFEST} was made for another code than the one the mods give (build the mod again)")
+        ranges = sorted((int(s, 16), int(e, 16)) for s, e in data["code"])
+        for s, e in ranges:
+            if extension is None or not extension[0] <= s < e <= extension[1]:
+                raise ModError(f"{MANIFEST}: the range 0x{s:08X}-0x{e:08X} is not inside the mod's code past the "
+                               "game's data" + (f" (0x{extension[0]:08X}-0x{extension[1]:08X})" if extension
+                                                else " (it has none)"))
+        entries = _entries(data["entries"], ranges, "the mod's code")
+        packs, taken = [], list(ranges)
+        if data["format"] >= 2:
+            if not isinstance(data["packs"], list):
+                raise ModError(f"{MANIFEST}: its packs are not a list")
+            packs = [_pack(os.path.dirname(os.path.abspath(path)), item, taken) for item in data["packs"]]
+        if not ranges and not packs:
+            raise ModError(f"{MANIFEST} names no code")
+    except ModError:
+        raise
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        raise ModError(f"{MANIFEST}: {e!r}") from e
+    return Manifest(path, ranges, entries, packs)
 
 
 def ips_ranges(patch: bytes) -> list[tuple[int, int]]:
