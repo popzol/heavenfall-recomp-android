@@ -6,6 +6,10 @@ package io.github.popzol.heavenfall;
  * screen again (Android 10 and later), so the player would find themselves outside the app with the update going on
  * somewhere they cannot see. The phone says, every moment, whether the app is on the screen; the player has left when
  * it has stayed off it for {@code quietMs} without a break (a quick look at another app and back does not count).
+ *
+ * <p>A game that is open counts as the app being in use, on the screen or not ({@link GameOpen}): the player may step
+ * out to the phone's home screen with the hunt still running, and stopping the app then would lose it. The quiet time
+ * starts when the game has ended and the app is off the screen.
  */
 public final class LeaveGate {
     private final long quietMs;
@@ -15,9 +19,12 @@ public final class LeaveGate {
         this.quietMs = Math.max(0, quietMs);
     }
 
-    /** Tells the gate what the phone says at {@code nowMs}; true once the app has been off the screen for the quiet time. */
-    public boolean left(boolean appOnScreen, long nowMs) {
-        if (appOnScreen) {
+    /**
+     * Tells the gate what the phone says at {@code nowMs}; true once the app has been off the screen, with no game
+     * open, for the quiet time.
+     */
+    public boolean left(boolean appOnScreen, boolean gameOpen, long nowMs) {
+        if (appOnScreen || gameOpen) {
             awaySince = -1;
             return false;
         }

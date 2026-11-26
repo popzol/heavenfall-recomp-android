@@ -198,6 +198,7 @@ public final class UpdateRunner {
                             plan = plan.withoutBuild();
                             index--;   // the step after the build (the app's install, when it is last) is now here
                         } else {
+                            plan = plan.withBuildConfirmed();   // from here the build is in the time left and the count
                             buildStep(label);
                         }
                         break;
@@ -252,7 +253,7 @@ public final class UpdateRunner {
                 throw e;
             }
             publish(JobProgress.Phase.RESTARTING, lastPermille, new Text("hf_state_job_restarting"), 0, step.kind,
-                    index + 1, plan.steps().size(), true);
+                    index + 1, plan.stepCount(), true);
         }
 
         File download(UpdatePlan.Step step, Text label, double from, double span) throws UpdateException {
@@ -337,7 +338,7 @@ public final class UpdateRunner {
             JobProgress.Phase phase = cancelled ? JobProgress.Phase.CANCELLED : JobProgress.Phase.FAILED;
             Text state = new Text(cancelled ? "hf_state_job_cancelled" : "hf_state_job_failed");
             JobProgress p = new JobProgress(phase, Math.max(lastPermille, 0), state, 0, kind,
-                    plan == null ? 0 : index + 1, plan == null ? 0 : plan.steps().size(), e.reason, e.advice);
+                    plan == null ? 0 : index + 1, plan == null ? 0 : plan.stepCount(), e.reason, e.advice);
             last = p;
             listener.progress(p);
         }
@@ -353,7 +354,7 @@ public final class UpdateRunner {
             boolean same = state.equals(lastState);
             if (same && permille == lastPermille) return;
             publish(JobProgress.Phase.RUNNING, permille, state, plan.remainingMs(index, stepFraction, stepMsLeft),
-                    plan.steps().get(index).kind, index + 1, plan.steps().size(), !same || stepFraction >= 1.0);
+                    plan.steps().get(index).kind, index + 1, plan.stepCount(), !same || stepFraction >= 1.0);
         }
 
         void publish(JobProgress.Phase phase, int permille, Text state, long msLeft, UpdatePlan.StepKind kind,

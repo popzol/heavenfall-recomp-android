@@ -403,7 +403,58 @@ public class UpdatePlanTest {
         assertTrue(shared.weightMs > set.weightMs);
         for (UpdatePlan.Step s : p.steps()) assertTrue(s.weightMs >= 1);
         assertEquals(tuning.buildSeconds * 1000L, p.steps().get(3).weightMs);
+        assertEquals("a build that may not run is not in the total", p.steps().get(0).weightMs + p.steps().get(1).weightMs
+                + p.steps().get(2).weightMs, p.totalMs());
         assertEquals(p.steps().get(0).weightMs + p.steps().get(1).weightMs + p.steps().get(2).weightMs
-                + p.steps().get(3).weightMs, p.totalMs());
+                + p.steps().get(3).weightMs, p.withBuildConfirmed().totalMs());
+    }
+
+    /**
+     * Catches the time left and the step count counting a code build that a mod with the same code never runs ("Step
+     * 4 of 6, about 34 min left", then "Step 5 of 5"): the undecided build is in neither; once the applied code needs
+     * it, it is in both, and the bar never goes back when it joins.
+     */
+    @Test
+    public void anUndecidedBuildIsNotCounted() {
+        UpdatePlan p = make(base());
+        assertTrue(p.steps().get(3).conditional);
+        assertEquals("set, shared file and applying", 3, p.stepCount());
+        assertTrue("no build in the time left", p.remainingMs(0, 0.0) < tuning.buildSeconds * 1000L);
+        assertEquals(p.totalMs(), p.remainingMs(0, 0.0));
+        assertEquals("without it the plan counts the same", p.stepCount(), p.withoutBuild().stepCount());
+        assertEquals(p.totalMs(), p.withoutBuild().totalMs());
+        assertEquals(p.permille(2, 1.0), p.permille(3, 0.0));
+
+        UpdatePlan needed = p.withBuildConfirmed();
+        assertFalse(needed.steps().get(3).conditional);
+        assertEquals(4, needed.stepCount());
+        assertEquals(p.totalMs() + tuning.buildSeconds * 1000L, needed.totalMs());
+        assertEquals(needed.totalMs() - p.totalMs(), needed.remainingMs(3, 0.0));
+        assertEquals("a library that is missing is a build from the start", 4,
+                make(libraryMissing()).stepCount());
+    }
+
+    /**
+     * Catches the bar left at its end for a whole build: the bar never goes back, so a build left out of it until it
+     * is known to run would join with the bar already full. The bar keeps the build's share from the start and moves
+     * through the build; a build that is not needed only moves it forward.
+     */
+    @Test
+    public void theBarKeepsRoomForABuildThatMayRun() {
+        UpdatePlan p = make(base());
+        assertTrue(p.steps().get(3).conditional);
+        UpdatePlan needed = p.withBuildConfirmed();
+        int atBuild = needed.permille(3, 0.0);
+        assertEquals("confirming the build does not move the bar", p.permille(3, 0.0), atBuild);
+        assertTrue("room is left for the build: " + atBuild, atBuild < 500);
+        assertTrue("the bar moves through the build", needed.permille(3, 0.5) > atBuild + 300);
+        assertTrue("a build left out only moves the bar forward",
+                p.withoutBuild().permille(3, 0.0) >= p.permille(2, 1.0));
+    }
+
+    private static UpdatePlan.Input libraryMissing() {
+        UpdatePlan.Input in = base();
+        in.library = HomeModel.Library.NONE;
+        return in;
     }
 }
