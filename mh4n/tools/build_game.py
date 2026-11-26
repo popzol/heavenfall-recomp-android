@@ -78,6 +78,7 @@ import recompile  # noqa: E402
 import version_map  # noqa: E402
 from recomp import build as rbuild  # noqa: E402
 from recomp.analysis import Image  # noqa: E402
+from recomp.jobs import own_peak_mb  # noqa: E402
 
 # What a code library's code depends on (code_library_id): the translator, the runtime it is compiled with and the tables of
 # config/ it is translated with (functions, hook points, tunables). A change to any of them makes a library of another kind,
@@ -710,6 +711,9 @@ def main(argv=None) -> int:
                               hooks=hooks, tunables=tunables, log=lambda m: print(m, flush=True),
                               unit_bytes=build_tuning.unit_bytes(tuning), keep_functions=False)
     print(f"{res['report']['functions']} functions, {res['report']['hook_points']} hook points")
+    peak = own_peak_mb()   # (the translation's: the compiles are processes of their own; config/build_tuning.json)
+    if peak:
+        print(f"translation: peak memory {peak:.0f} MB (translation.peak_mb {tuning['translation']['peak_mb']})")
     for p in res["problems"]:
         print(f"  warning: {p}")
     # what the runtime is told about the game version (beside the recompiled code, which recompile() keeps clean)

@@ -285,7 +285,8 @@ def build(outdir: str, jobs: int, opt: str, defines: list[str], lib_name: str, e
             raise SystemExit(f"{lib} wouldn't load on Android: " + "; ".join(problems))
     if cache is not None:
         dropped, freed = cache.trim()
-        gone = f" ({dropped} of its oldest objects dropped, {freed >> 20} MB, for the disk's free space)" if dropped else ""
+        gone = (f" ({dropped} of its oldest objects dropped, {freed >> 20} MB, for the disk's free space)"
+                if dropped else "")
         print(f"objects' cache: {cache.size() >> 20} MB{gone}")
     return lib
 

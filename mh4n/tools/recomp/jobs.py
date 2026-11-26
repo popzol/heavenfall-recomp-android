@@ -278,6 +278,21 @@ else:
         return None
 
 
+def own_peak_mb() -> float | None:
+    """This process's peak resident memory, its children's not counted (Linux and Android: getrusage's ru_maxrss;
+    Windows: its peak working set)."""
+    if sys.platform == "win32":
+        _k32.GetCurrentProcess.restype = wt.HANDLE
+        c = _counters(_k32.GetCurrentProcess())
+        return c.PeakWorkingSetSize / (1 << 20) if c else None
+    try:
+        import resource
+    except ImportError:
+        return None
+    m = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return m / (1 << 20) if sys.platform == "darwin" else m / 1024
+
+
 # ---- the compiles
 
 class CompileFailed(Exception):

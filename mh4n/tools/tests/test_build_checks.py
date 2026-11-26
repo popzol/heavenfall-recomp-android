@@ -52,6 +52,19 @@ def test_the_space_counts_the_work_folder_and_the_caches_oldest(tmp_path):
     assert lack > 0 and "MB free" in why
 
 
+def test_a_builds_log_gives_the_numbers_to_copy_back():
+    # the break: the phone's measured build read wrong (the units then cut to a memory the phone doesn't have)
+    lines = [f"  compiled f{i:08x} ({kib} KiB of C): 3.5 s, {round(60 + 180 * kib / 1024) + (9 if i == 3 else 0)} MB"
+             + (", with 2 others" if i % 2 else "") for i, kib in enumerate([64, 128, 256, 384, 512, 640])]
+    log = "\n".join(["compile jobs: 3", *lines, "  compiled f_00ce7920 (271 KiB of C): 9.0 s, ? MB",
+                     "translation: peak memory 1488 MB (translation.peak_mb 1600)", "compiles: 6 in 20 s"])
+    found = build_tuning.fit_log(log)
+    assert found["compiles"] == 6 and found["translation_peak_mb"] == 1488
+    assert 55 <= found["base_mb"] <= 70 and 170 <= found["mb_per_mib_of_c"] <= 190
+    assert 0 < found["over_max_mb"] <= 9 and found["over_p99_mb"] == found["over_max_mb"]   # (six: p99 is the worst)
+    assert found["suggested_base_mb"] >= found["base_mb"] + found["over_p99_mb"]
+
+
 def test_the_tuning_file_is_checked(tmp_path):
     # the break: a damaged or partial file of numbers making units of no size, or zero jobs
     bad = json.loads(open(build_tuning.PATH, encoding="utf-8").read())
