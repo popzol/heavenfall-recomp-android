@@ -75,6 +75,11 @@ El código del juego se queda en tu teléfono: no lo compartas nunca.
 ## Qué cambia respecto a 4u-native
 
 - El nombre, el identificador de aplicación, el ícono y las versiones publicadas (arriba), y la clave con que se firman.
+- La app abre en su propia primera pantalla y su guía de la primera vez (arriba), que instalan el mod Heavenfall desde
+  sus versiones publicadas, lo mantienen al día junto con la app y arrancan el juego.
+- El motor lleva lo que Heavenfall necesita: el código propio del mod recompilado con el del juego, y sus ganchos de
+  interfaz.
+- La compilación en el móvil intenta otra vez una compilación cortada y escribe en su registro dónde se paró.
 - Los créditos de la app dicen que es una versión modificada, y dónde está la original.
 - Se quitan la revisión que 4u-native hacía de sus propias versiones y su aviso sobre el certificado de firma del APK.
 - La autoridad con que se comparte el registro sigue al identificador de aplicación.

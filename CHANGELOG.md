@@ -4,13 +4,24 @@
 
 ## Heavenfall for Android
 
-### Unreleased
+### 1.0.0
 
-- A modified version of 4u-native, as an app of its own: "Heavenfall", application id `io.github.popzol.heavenfall`, beside 4u-native.
+- Heavenfall is an app of its own that sets the mod up, keeps it up to date and starts the game.
+- A guide on the first run asks for the game folder, your American game, its 1.3.0 update and, optionally, MH XX.
+- Each file is checked, and the app says what is wrong and what to do.
+- One button on the first screen does the next thing: Set up, Install, Update, Build, Reinstall, Resume or Play.
+- Every job runs under one bar with its step and the time left, and can be cancelled.
+- The mod is made on your phone from your own dumps: nothing of the game is in the app or its releases.
+- With your own copy of MH XX, the mod adds its gear looks and rare materials.
+- The game's code is built on the phone; a newer mod rebuilds only the parts that changed.
+- A job goes on in the background with a notification, and Resume picks it up after a restart.
+- A build the phone stops is tried once more by itself, and its log says where it stopped.
+- The app updates itself, and installs its new version only after you leave it, never during a game.
+- The mod comes with single-screen mode on and the HUD at its full size.
+- It installs beside 4u-native as an app of its own: "Heavenfall", application id `io.github.popzol.heavenfall`.
 - Test builds are "Heavenfall test", application id `io.github.popzol.heavenfall.test`: they never replace your install.
 - The credits and the licenses say it is a modified version of 4u-native by khorne-hub, with a link to the original.
 - 4u-native's check of its own releases and its warning about the signing certificate are taken out.
-- The app's version is in `heavenfall/VERSION`, starting at 0.1.0.
 
 Everything below is the history of 4u-native, the app this one is modified from.
 
@@ -744,13 +755,24 @@ came with ads, it isn't the official one. Check the APK's SHA-256 against the re
 
 ## Heavenfall para Android
 
-### Sin publicar
+### 1.0.0
 
-- Una versión modificada de 4u-native, como app aparte: "Heavenfall", identificador `io.github.popzol.heavenfall`, junto a 4u-native.
+- Heavenfall es una app propia que prepara el mod, lo mantiene al día y arranca el juego.
+- La primera vez, una guía pide la carpeta del juego, tu juego americano, su update 1.3.0 y, si quieres, MH XX.
+- Cada archivo se comprueba, y la app dice qué falla y qué hacer.
+- Un botón en la primera pantalla hace lo siguiente: Preparar, Instalar, Actualizar, Construir, Reinstalar, Continuar o Jugar.
+- Cada tarea va bajo una sola barra, con su paso y el tiempo que queda, y se puede cancelar.
+- El mod se hace en tu móvil a partir de tus volcados: nada del juego va en la app ni en sus versiones.
+- Con tu propia copia de MH XX, el mod añade sus aspectos de equipo y sus materiales raros.
+- El código del juego se compila en el móvil; un mod más nuevo solo recompila las partes que cambiaron.
+- Una tarea sigue en segundo plano con una notificación, y Continuar la retoma tras un reinicio.
+- Una compilación que el móvil corta se intenta otra vez sola, y su registro dice dónde se paró.
+- La app se actualiza sola, e instala su versión nueva solo cuando sales de ella, nunca durante una partida.
+- El mod viene con el modo de pantalla única activado y el HUD a su tamaño completo.
+- Se instala junto a 4u-native como app aparte: "Heavenfall", identificador `io.github.popzol.heavenfall`.
 - Las versiones de prueba se llaman "Heavenfall test", con identificador `io.github.popzol.heavenfall.test`: nunca reemplazan tu instalación.
 - Los créditos y las licencias dicen que es una versión modificada de 4u-native de khorne-hub, con un enlace a la original.
 - Se quitan la revisión que 4u-native hacía de sus propias versiones y su aviso sobre el certificado de firma.
-- La versión de la app está en `heavenfall/VERSION`, desde la 0.1.0.
 
 Todo lo que sigue es el historial de 4u-native, la app de la que esta es una versión modificada.
 

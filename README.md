@@ -72,6 +72,10 @@ The game's code stays on your phone: never share it.
 ## What is changed from 4u-native
 
 - The name, the application id, the icon and the releases (above), and the key the releases are signed with.
+- The app opens on its own first screen and first-run guide (above), which install the mod Heavenfall from its
+  releases, keep it and the app up to date, and start the game.
+- The engine carries Heavenfall's needs: the mod's own code recompiled with the game's, and its interface hooks.
+- Building on the phone tries a stopped build once more and writes where it stopped in its log.
 - The app's credits say it is a modified version, and where the original is.
 - 4u-native's check of its own releases, and its warning about the APK's signing certificate, are taken out.
 - The log's share authority follows the application id.
