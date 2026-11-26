@@ -6,8 +6,10 @@ import java.util.List;
 
 /**
  * Runs one update job: asks for the latest releases, makes the {@link UpdatePlan} and does its steps one after the
- * other, telling {@link JobProgress} to a listener. APP downloads the APK and hands it to the {@link AppInstaller}
- * (after writing the resume note: installing ends this process); SET and SHARED download; APPLY makes the mod through
+ * other, telling {@link JobProgress} to a listener. APP downloads the APK, and once it is there says where its install
+ * goes ({@link UpdatePlan#withInstall}: as late as this app can do the rest for the new one); APP_INSTALL hands it to
+ * the {@link AppInstaller} (after writing the resume note: installing ends this process, and the installer waits
+ * for the player to leave the app first); SET and SHARED download; APPLY makes the mod through
  * the {@link ModApplier} and then writes {@code installed.json}; BUILD runs the {@link LibraryBuilder} and records
  * the library it made. A step that fails or is cancelled leaves what the plan says it leaves, so the same request
  * can be run again and goes on from there. Pure Java: the phone's parts come in through the interfaces.
@@ -110,6 +112,8 @@ public final class UpdateRunner {
         final JobPaths paths;
         final Control control;
         UpdatePlan plan;
+        /** Work is left for the new app after the app's install (the bar says so while the install waits). */
+        boolean moreAfterInstall;
         int index;
         JobProgress last = JobProgress.IDLE;
         Text lastState;
@@ -156,15 +160,18 @@ public final class UpdateRunner {
             File set = null;
             File shared = null;
             ReleaseRules.Release release = latest.mod.ok() ? latest.mod.release : null;
-            List<UpdatePlan.Step> steps = plan.steps();
-            for (index = 0; index < steps.size(); index++) {
-                UpdatePlan.Step step = steps.get(index);
+            for (index = 0; index < plan.steps().size(); index++) {
+                UpdatePlan.Step step = plan.steps().get(index);
                 control.check();
                 Text label = new Text(step.kind.labelKey());
                 switch (step.kind) {
                     case APP:
-                        if (appStep(step, label)) return;
+                        download(step, label, 0, 1);
+                        placeInstall();
                         break;
+                    case APP_INSTALL:
+                        installApp(step);
+                        return;
                     case SET:
                         set = download(step, label, 0, 1);
                         break;
@@ -172,14 +179,24 @@ public final class UpdateRunner {
                         shared = download(step, label, 0, 1);
                         break;
                     case APPLY:
-                        applyStep(edition, release, input, set, shared, label);
+                        try {
+                            applyStep(edition, release, input, set, shared, label);
+                        } catch (UpdateException e) {
+                            if (!AppInstallRules.needsNewerApp(e) || !plan.has(UpdatePlan.StepKind.APP_INSTALL)) throw e;
+                            // the set is made for the app that is waiting to be installed: it goes first, the rest after it
+                            parts.log.line("update job: the set needs the new app, installing it first");
+                            plan = plan.withInstall(UpdatePlan.InstallAt.FIRST);
+                            moreAfterInstall = true;
+                            index = plan.indexOf(UpdatePlan.StepKind.APP_INSTALL) - 1;
+                            break;
+                        }
                         set = null;
                         shared = null;
                         break;
                     case BUILD:
                         if (step.conditional && !buildNeeded()) {
                             plan = plan.withoutBuild();
-                            index = steps.size();
+                            index--;   // the step after the build (the app's install, when it is last) is now here
                         } else {
                             buildStep(label);
                         }
@@ -191,18 +208,43 @@ public final class UpdateRunner {
             done();
         }
 
-        /** True when the app was replaced and this job ends here (it goes on in the new app). */
-        boolean appStep(UpdatePlan.Step step, Text label) throws UpdateException {
-            double share = Math.min(1.0, downloadMs(step.asset.size) / (double) step.weightMs);
-            File apk = download(step, label, 0, share);
-            publishStep(share, new Text("hf_state_job_installing_app"));
+        /**
+         * The APK is downloaded: decides where its install goes among the steps. As late as possible: the mod, and the
+         * library too when the new app's tools make the same one, are done by this app while the player is in it; the
+         * player must leave the app before its install (see {@link AppInstaller}).
+         */
+        void placeInstall() {
+            File apk = new File(paths.downloads, parts.editions.app().apk);
+            String apkId = parts.appInstaller.libraryId(apk);
+            UpdatePlan.InstallAt at = AppInstallRules.placement(parts.builder.wantedId(), apkId);
+            parts.log.line("update job: the app's install goes " + at + " (library of the new app '" + apkId
+                    + "', of this one '" + parts.builder.wantedId() + "')");
+            plan = plan.withInstall(at);
+            // an install that leaves the build to the new app has work after it, whatever this plan lists
+            moreAfterInstall = at != UpdatePlan.InstallAt.LAST || plan.stepsAfterInstall();
+        }
+
+        /** Installs the downloaded APK (this job ends there: it goes on in the new app, which tells how it ended). */
+        void installApp(UpdatePlan.Step step) throws UpdateException {
+            File apk = new File(paths.downloads, parts.editions.app().apk);
             Resume note = plan.resumeNote();
             if (note != null) writeText(paths.resumeFile, note.toJson());
+            Text leave = new Text(moreAfterInstall ? "hf_state_job_leave_app_then" : "hf_state_job_leave_app_last");
             try {
                 parts.appInstaller.install(apk, control, new AppInstaller.Waiting() {
                     @Override
                     public void needsConfirmation() {
-                        publishStep(share, new Text("hf_state_job_confirm_install"));
+                        publishStep(0, new Text("hf_state_job_confirm_install"));
+                    }
+
+                    @Override
+                    public void waitingToLeave() {
+                        publishStep(0, leave);
+                    }
+
+                    @Override
+                    public void installing() {
+                        publishStep(0.5, new Text("hf_state_job_installing_app"));
                     }
                 });
             } catch (UpdateException e) {
@@ -211,7 +253,6 @@ public final class UpdateRunner {
             }
             publish(JobProgress.Phase.RESTARTING, lastPermille, new Text("hf_state_job_restarting"), 0, step.kind,
                     index + 1, plan.steps().size(), true);
-            return true;
         }
 
         File download(UpdatePlan.Step step, Text label, double from, double span) throws UpdateException {
@@ -308,7 +349,7 @@ public final class UpdateRunner {
         }
 
         void publishStep(double stepFraction, Text state) {
-            int permille = plan.permille(index, stepFraction);
+            int permille = Math.max(plan.permille(index, stepFraction), lastPermille);   // a plan that changed never sets the bar back
             boolean same = state.equals(lastState);
             if (same && permille == lastPermille) return;
             publish(JobProgress.Phase.RUNNING, permille, state, plan.remainingMs(index, stepFraction, stepMsLeft),

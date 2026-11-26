@@ -27,6 +27,7 @@ public class TuningTest {
     public void sampleReads() {
         Tuning t = Support.tuning();
         assertTrue(t.minFreeDownloadMb > 0);
+        assertTrue(t.appLeaveQuietSeconds >= 0 && t.appLeaveWaitMaxSeconds >= 60);
         assertTrue(t.minBatteryPercent > 0 && t.minBatteryPercent < 100);
         assertTrue(t.downloadKibPerSecond > 0 && t.applyKibPerSecond > 0 && t.buildSeconds > 0);
         assertTrue(t.buildUnits > 0 && t.buildUnitMs > 0);

@@ -23,6 +23,8 @@ public final class Tuning {
 
     public final long minFreeDownloadMb;      // free space to download and apply a mod (the build's own is BuildNeeds)
     public final int minBatteryPercent;       // below it, not charging, a build does not start
+    public final long appLeaveQuietSeconds;   // the player must stay out of the app this long before its update installs
+    public final long appLeaveWaitMaxSeconds; // how long the update waits for the player to leave the app, then stops
     public final long downloadKibPerSecond;   // the bar's weight of a download
     public final long applyKibPerSecond;      // the bar's weight of applying a set (bytes of the set and the shared file)
     public final long appInstallSeconds;      // the bar's weight of installing the APK, after its download
@@ -36,6 +38,8 @@ public final class Tuning {
     private Tuning(JSONObject o) {
         minFreeDownloadMb = range(o, "min_free_download_mb", 1, 1L << 24);
         minBatteryPercent = (int) range(o, "min_battery_percent", 0, 100);
+        appLeaveQuietSeconds = range(o, "app_leave_quiet_s", 0, 600);
+        appLeaveWaitMaxSeconds = range(o, "app_leave_wait_max_s", 60, 24L * 3600);
         JSONObject expected = Json.child(o, "expected");
         if (expected == null) throw new InvalidException("tuning.json: no expected");
         downloadKibPerSecond = positive(expected, "download_kib_s");

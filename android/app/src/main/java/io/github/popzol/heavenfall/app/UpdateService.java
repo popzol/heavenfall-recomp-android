@@ -264,7 +264,7 @@ public final class UpdateService extends Service {
             Locations.recoverMod(app);   // a swap cut short is put right before this job touches the mod
             UrlMap map = Networks.urlMap(app);
             UpdateRunner.Parts parts = new UpdateRunner.Parts(new ReleaseClient(map), new Downloader(map),
-                    new SelfUpdate(app), applier, new PhoneLibraryBuilder(app, Config.tuning(app)),
+                    new SelfUpdate(app, Config.tuning(app)), applier, new PhoneLibraryBuilder(app, Config.tuning(app)),
                     Config.editions(app), Config.tuning(app), line -> Log.i(TAG, line), new PhoneConditions(app));
             end = new UpdateRunner(parts, p -> {
                 publish(p);

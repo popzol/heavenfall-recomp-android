@@ -7,19 +7,23 @@ import java.util.List;
 /**
  * The steps of one "Update to X", in the order they run, with each step's weight on the single progress bar.
  *
- * <p>Order: the app's APK when a newer one is in the release (installing it ends the running app, so every later step
- * runs after the restart, and a {@link Resume} note carries the update over); the mod's set; the shared file when the
- * set names one; applying (the mod folder made in a staging folder, checked, then put in place together with
- * {@code installed.json}); building the library when it is missing or not made for this mod's code or these tools
- * (when only the mod is new, the step is kept as {@link Step#conditional}: after applying, {@link #buildStillNeeded}
- * says whether the new code needs it, and {@link #withoutBuild} drops it).
+ * <p>Order: the app's APK when a newer one is in the release, downloaded first ({@link StepKind#APP}); the mod's set;
+ * the shared file when the set names one; applying (the mod folder made in a staging folder, checked, then put in place
+ * together with {@code installed.json}); building the library when it is missing or not made for this mod's code or
+ * these tools (when only the mod is new, the step is kept as {@link Step#conditional}: after applying,
+ * {@link #buildStillNeeded} says whether the new code needs it, and {@link #withoutBuild} drops it). Installing the
+ * APK ({@link StepKind#APP_INSTALL}) replaces the running app: Android stops it, and an app in the background cannot
+ * bring itself back, so the install never happens while the player is in the app (the player must leave it first).
+ * To keep the player in the app for as long as possible, the install goes as late as the running app can do the rest
+ * ({@link InstallAt}): decided once the APK is downloaded ({@link #withInstall}); a {@link Resume} note carries the
+ * update over to what runs after it.
  *
  * <p>An interrupted step leaves what {@link Step#leftover} says; the home screen sees it again as a half-done job
  * ({@link #jobLeft}) or, after applying, as a library that is not good.
  */
 public final class UpdatePlan {
     public enum StepKind {
-        APP("hf_step_app"), SET("hf_step_set"), SHARED("hf_step_shared"), APPLY("hf_step_apply"), BUILD("hf_step_build");
+        APP("hf_step_app"), APP_INSTALL("hf_step_app_install"), SET("hf_step_set"), SHARED("hf_step_shared"), APPLY("hf_step_apply"), BUILD("hf_step_build");
 
         private final String labelKey;
 
@@ -31,6 +35,16 @@ public final class UpdatePlan {
         public String labelKey() {
             return labelKey;
         }
+    }
+
+    /** Where the APK's install goes among the steps (see {@link UpdatePlan#withInstall}). */
+    public enum InstallAt {
+        /** Right after the download: every other step runs in the new app (the set needs it, or the new app must apply it). */
+        FIRST,
+        /** After the mod is made; the library is the new app's to build (its tools are not these). */
+        AFTER_MOD,
+        /** At the very end: the running app does the mod and the library (the new app's tools make the same library). */
+        LAST
     }
 
     /** What an interrupted step leaves behind. */
@@ -93,7 +107,11 @@ public final class UpdatePlan {
         }
 
         Step withoutRestart() {
-            return new Step(kind, asset, weightMs, false, conditional, leftover);
+            return afterRestart(false);
+        }
+
+        Step afterRestart(boolean after) {
+            return new Step(kind, asset, weightMs, after, conditional, leftover);
         }
     }
 
@@ -167,8 +185,9 @@ public final class UpdatePlan {
 
         List<Step> steps = new ArrayList<>();
         if (appNewer) {
-            steps.add(new Step(StepKind.APP, in.appAsset,
-                    downloadMs(in.appAsset.size, tuning) + tuning.appInstallSeconds * 1000L, false, false,
+            steps.add(new Step(StepKind.APP, in.appAsset, downloadMs(in.appAsset.size, tuning), false, false,
+                    Leftover.PARTIAL_DOWNLOAD));
+            steps.add(new Step(StepKind.APP_INSTALL, null, tuning.appInstallSeconds * 1000L, false, false,
                     Leftover.NOTHING));
         }
         boolean after = appNewer;
@@ -228,10 +247,58 @@ public final class UpdatePlan {
         return list;
     }
 
-    /** The note to write just before the APK is installed; null when the plan does not replace the app. */
+    /**
+     * The note to write just before the APK is installed; null when the plan does not replace the app. The new app
+     * reads it even when nothing is left to do, to tell that the update is done.
+     */
     public Resume resumeNote() {
-        if (appTarget == null || steps.size() < 2) return null;
-        return new Resume(editionId, appTarget, modTarget, withXx, Math.min(999, permille(1, 0.0)));
+        int at = indexOf(StepKind.APP_INSTALL);
+        if (appTarget == null || at < 0) return null;
+        return new Resume(editionId, appTarget, modTarget, withXx, Math.min(999, permille(at, 0.0)));
+    }
+
+    /** The place of the first step of this kind, or -1. */
+    public int indexOf(StepKind kind) {
+        for (int i = 0; i < steps.size(); i++) {
+            if (steps.get(i).kind == kind) return i;
+        }
+        return -1;
+    }
+
+    /** Whether steps are left to run after the APK's install (they run in the new app). */
+    public boolean stepsAfterInstall() {
+        int at = indexOf(StepKind.APP_INSTALL);
+        return at >= 0 && at < steps.size() - 1;
+    }
+
+    /**
+     * The same steps with the APK's install placed at {@code where}. The steps that run after it are flagged
+     * {@link Step#afterRestart}; {@link InstallAt#AFTER_MOD} leaves out the build (the new app plans it again from
+     * what it finds). Nothing changes for a plan with no install.
+     */
+    public UpdatePlan withInstall(InstallAt where) {
+        int at = indexOf(StepKind.APP_INSTALL);
+        if (at < 0) return this;
+        Step install = steps.get(at);
+        List<Step> head = new ArrayList<>(), mod = new ArrayList<>();
+        for (Step s : steps) {
+            if (s.kind == StepKind.APP) {
+                head.add(s);
+            } else if (s.kind == StepKind.BUILD) {
+                if (where != InstallAt.AFTER_MOD) mod.add(s);
+            } else if (s.kind != StepKind.APP_INSTALL) {
+                mod.add(s);
+            }
+        }
+        List<Step> list = new ArrayList<>(head);
+        if (where == InstallAt.FIRST) {
+            list.add(install);
+            for (Step s : mod) list.add(s.afterRestart(true));
+        } else {
+            for (Step s : mod) list.add(s.afterRestart(false));
+            list.add(install);
+        }
+        return new UpdatePlan(status, refusal, list, editionId, appTarget, modTarget, withXx, basePermille);
     }
 
     /**
@@ -241,7 +308,7 @@ public final class UpdatePlan {
     public UpdatePlan afterRestart(Resume note) {
         List<Step> rest = new ArrayList<>();
         for (Step s : steps) {
-            if (s.kind != StepKind.APP) rest.add(s.withoutRestart());
+            if (s.kind != StepKind.APP && s.kind != StepKind.APP_INSTALL) rest.add(s.withoutRestart());
         }
         return new UpdatePlan(rest.isEmpty() ? Status.UP_TO_DATE : Status.STEPS, null, rest, editionId, null, modTarget,
                 withXx, note.basePermille);

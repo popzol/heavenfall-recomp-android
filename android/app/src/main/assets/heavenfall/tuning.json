@@ -2,6 +2,8 @@
   "format": 2,
   "min_free_download_mb": 700,
   "min_battery_percent": 25,
+  "app_leave_quiet_s": 3,
+  "app_leave_wait_max_s": 1800,
   "heat": {
     "status_percent": [100, 100, 100, 50, 0, 0, 0],
     "battery_c": [40, 43, 45, 47],

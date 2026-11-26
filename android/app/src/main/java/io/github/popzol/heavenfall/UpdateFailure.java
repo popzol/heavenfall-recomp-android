@@ -29,6 +29,7 @@ public enum UpdateFailure {
     SELF_INVALID("hf_fail_self_invalid", "hf_advice_download_again"),
     SELF_STORAGE("hf_fail_self_storage", "hf_advice_space"),
     SELF_NO_ANSWER("hf_fail_self_no_answer", "hf_advice_resume"),
+    SELF_NOT_LEFT("hf_fail_self_not_left", "hf_advice_leave_the_app"),
     SELF_FAILED("hf_fail_self_failed", "hf_advice_resume"),
     // applying the mod and building the library
     APPLY_FAILED("hf_fail_apply_failed", "hf_advice_resume"),

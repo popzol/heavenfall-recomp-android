@@ -49,6 +49,23 @@ public class WiringScanTest {
     }
 
     @Test
+    public void theAppsOwnUpdateIsCommittedOnlyAfterThePlayerLeft() throws Exception {
+        // Catches (A11) a commit of the app's own update while the player is in the app (Android stops the app at the
+        // install and an app in the background cannot bring its screen back: the player ended outside the app), a
+        // second commit path that skips the wait, and the check that tells the app is on the screen being dropped.
+        String self = read(JAVA + "io/github/popzol/heavenfall/app/SelfUpdate.java");
+        int wait = self.indexOf("awaitLeaving(control, waiting);");
+        int commit = self.indexOf("commit(installer, id);");
+        assertTrue("the install waits for the player to leave", wait > 0);
+        assertTrue("and only then commits", commit > wait);
+        assertEquals("one commit only", self.indexOf(".commit("), self.lastIndexOf(".commit("));
+        assertTrue("the wait asks the phone for the app's foreground state",
+                self.contains("IMPORTANCE_FOREGROUND") && self.contains("getRunningAppProcesses"));
+        String ticks = self.substring(self.indexOf("private void commit("));
+        assertFalse("no commit before the wait further down", ticks.contains("awaitLeaving(control"));
+    }
+
+    @Test
     public void theLibraryBuildCompilesTheLaunchersModAloneIntoThePrivateStorage() throws Exception {
         // Catches (F5) a build that compiles every code mod switched on in the mods folder instead of the launcher's
         // mod alone, and (F1) a build into, or a library read from, anywhere but the app's private storage.
