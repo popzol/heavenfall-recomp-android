@@ -20,6 +20,8 @@ game's data (Heavenfall's "extension"), that code's range and CRC-32 (rc_ext_*),
 from __future__ import annotations
 
 import argparse
+import bisect
+import collections
 import hashlib
 import json
 import os
@@ -189,12 +191,44 @@ def port_table(version: dict, addresses: list[tuple[int, str]], root: str = ROOT
     return sorted(set(out))
 
 
+def pack_record(file: str, data: bytes) -> tuple[str, int, int]:
+    """A code mod's pack (code_mods.Pack: `file` in the mod's folder, under romfs/) as the library names it for the
+    runtime's check: its path in the game's RomFS, its size and CRC-32."""
+    path = file.replace("\\", "/")
+    if not path.startswith("romfs/"):
+        raise VersionError(f"the pack {file} is not a file of the mod's RomFS (romfs/)")
+    return path[len("romfs/"):], len(data), zlib.crc32(data)
+
+
+def _c_string(text: str) -> str:
+    """`text` as a C string literal of plain ASCII (other bytes as octal escapes)."""
+    out = []
+    for b in text.encode("utf-8"):
+        out.append(chr(b) if 0x20 <= b < 0x7F and chr(b) not in '"\\?' else f"\\{b:03o}")
+    return '"' + "".join(out) + '"'
+
+
 def version_source(key: str, library_id: str, table: list[tuple[int, int]],
-                   extension: tuple[int, int, int] | None = None) -> str:
-    """game_version.c: what the runtime is told about the game version the library was made for."""
+                   extension: tuple[int, int, int] | None = None,
+                   packs: list[tuple[str, int, int]] | None = None) -> str:
+    """game_version.c: what the runtime is told about the game version the library was made for. `packs` (a code
+    mod's, pack_record's): the RomFS files the library recompiled, which the runtime checks before the game runs
+    (native/src/services/fs/pack_check.cpp); a library without them says nothing of packs."""
     base, size, crc = extension or (0, 0, 0)
     usa = ", ".join(f"0x{a:08x}u" for a, _ in table) or "0"
     here = ", ".join(f"0x{b:08x}u" for _, b in table) or "0"
+    pack_lines = ""
+    if packs:
+        files = _c_string("\n".join(p for p, _, _ in packs))
+        sizes = ", ".join(f"0x{s:x}u" for _, s, _ in packs)
+        crcs = ", ".join(f"0x{c:08x}u" for _, _, c in packs)
+        pack_lines = (
+            "/* a code mod's packs: RomFS files its code loads at run time, recompiled from these bytes"
+            " (a path a line) */\n"
+            f"GV_EXPORT const unsigned rc_pack_count = {len(packs)}u;\n"
+            f"GV_EXPORT const char rc_pack_files[] = {files};\n"
+            f"GV_EXPORT const unsigned rc_pack_size[] = {{{sizes}}};\n"
+            f"GV_EXPORT const unsigned rc_pack_crc32[] = {{{crcs}}};\n")
     return f"""/* Written by tools/build_game.py (tools/game_version.py): the game version this library was made for. */
 #if defined(_WIN32)
 #define GV_EXPORT __declspec(dllexport)
@@ -213,7 +247,7 @@ GV_EXPORT const unsigned rc_port_addr_here[] = {{{here}}};
 GV_EXPORT const unsigned rc_ext_base = 0x{base:08x}u;
 GV_EXPORT const unsigned rc_ext_size = 0x{size:x}u;
 GV_EXPORT const unsigned rc_ext_crc32 = 0x{crc:08x}u;
-"""
+{pack_lines}"""
 
 
 # The port's own copy of the maps (port/src/game_shifts.h): a library carries the port's addresses that
@@ -295,6 +329,141 @@ def port_code_ranges(version: dict, functions: dict[int, int], hooks: dict[int, 
         if t is not None and t in sizes and not name.startswith("hook:"):
             out.append((t, t + sizes[t], f"function {name}"))
     return sorted(set(out))
+
+
+def app_addresses(version: dict, addresses: list[tuple[int, str]], hooks: dict[int, str],
+                  tunables: dict[int, tuple[int, str]], root: str = ROOT) -> list[tuple[int, str]]:
+    """Every address of the game the port uses, at `version`'s addresses: its own (config/port_addresses.txt, moved
+    as port_table moves them), its hook points and its tunables (`hooks` and `tunables` already at the version's)."""
+    moved = dict(port_table(version, addresses, root))
+    out = [(moved.get(usa, usa), name) for usa, name in addresses]
+    out += [(a, f"hook {name}") for a, name in hooks.items()]
+    out += [(a, f"tunable {name}") for a, (_, name) in tunables.items()]
+    return sorted(set(out))
+
+
+def functions_here(version: dict, rows: list[dict], root: str = ROOT) -> list[tuple[int, int, bool]]:
+    """config/functions.tsv's rows (build_function_table.read_tsv) as (start, size, Thumb) at `version`'s addresses;
+    a function with no address there is left out."""
+    shifts = None if version.get("target") or not version.get("shifts") else \
+        version_map.Shifts.load(os.path.join(root, version["shifts"]))
+    out = []
+    for r in rows:
+        usa = int(r["address"], 16)
+        here = usa if shifts is None else shifts.translate(usa)
+        if here is not None:
+            out.append((here, int(r["size"], 16), r["mode"] == "thumb"))
+    return out
+
+
+# A data address of the game is in place in a mod's code when the words of the code that hold it (literal pools)
+# still hold it there: a clear majority (version_map's), or, with no such word, its nearest neighbours' within this.
+NEIGHBOURS = 0x2000
+
+
+def misplaced(reference: bytes, modded: bytes, header: exh.ExHeader, functions: list[tuple[int, int, bool]],
+              wanted: list[tuple[int, str]]) -> list[str]:
+    """place_check's list of what moved, with nothing carried."""
+    return place_check(reference, modded, header, functions, wanted)[0]
+
+
+def own_memory(game: exh.ExHeader, mod: exh.ExHeader) -> tuple[int, int] | None:
+    """[start, end) of the memory a mod's exheader maps past the game's (from the page after the game's .bss to the
+    end of the mod's .bss), or None when it maps none."""
+    start = _align(game.data.address + game.data.size + game.bss_size)
+    end = mod.data.address + mod.data.size + mod.bss_size
+    return (start, end) if end > start else None
+
+
+def place_check(reference: bytes, modded: bytes, header: exh.ExHeader, functions: list[tuple[int, int, bool]],
+                wanted: list[tuple[int, str]], own: tuple[int, int] | None = None,
+                carriable: set[int] | frozenset = frozenset()) -> tuple[list[str], list[tuple[int, int, str]]]:
+    """Which of `wanted` (address, name) a code mod made from the same version as `reference` (its unmodified code,
+    laid out by `header`) moved: ("name 0x... (why)" for each that the library can't follow, [] when every one is
+    where that version has it; and (address, the mod's address, name) for each the mod moved whole, which the library
+    carries).
+
+    In .text, the function holding the address (`functions`: start, size, Thumb) must be the reference's at the same
+    address once the branches and pointers that leave it are set aside (version_map.compare), or, when the mod
+    patched it, lie between two functions that are. In the data (.rodata to the end of .bss), the words of the
+    reference that hold the address (its code's literal pools, its data's pointers) must hold it in the mod's code
+    too (a clear majority of them), or, when no word holds it, those of its nearest addresses on both sides that some
+    word holds. An address of `carriable` (the port's own, which the library can carry for its version) whose every
+    holder now holds one same other address inside `own` (the mod's own memory, own_memory) is moved by the mod:
+    its new address is the one the port uses. Some holders moved and some not, two new addresses, a new address
+    outside the mod's memory, a hook or a tunable moved: named, as anything else out of place."""
+    text_lo, text_hi = header.text.address, header.text.address + header.text.size
+    data_lo, data_hi = header.ro.address, header.data.address + header.data.size + header.bss_size
+    src, dst = version_map.image_of(header, reference), version_map.image_of(header, modded)
+    funcs = sorted(f for f in functions if text_lo <= f[0] < text_hi)
+    starts = [f[0] for f in funcs]
+
+    def same(f: tuple[int, int, bool]) -> bool:
+        return version_map.compare(src, dst, f[0], f[0], f[1], f[2]) is not None
+
+    def code_place(a: int) -> str | None:
+        a &= ~1
+        i = bisect.bisect_right(starts, a) - 1
+        if i < 0 or a >= funcs[i][0] + funcs[i][1]:
+            return None if reference[a - text_lo:a - text_lo + 4] == modded[a - text_lo:a - text_lo + 4] else \
+                "in no listed function, and its bytes differ"
+        if same(funcs[i]):
+            return None
+        before = next((f for f in reversed(funcs[max(0, i - 8):i]) if same(f)), None)
+        after = next((f for f in funcs[i + 1:i + 9] if same(f)), None)
+        return None if before and after else "its function and the code around it are not where they were"
+
+    held: dict[int, list] = {}      # data address -> [words of the reference holding it, of them still there, others]
+    for start, size in ((text_lo, header.text.size), (header.ro.address, header.ro.size),
+                        (header.data.address, header.data.size)):
+        lo, hi = start - text_lo, start - text_lo + (size // 4) * 4
+        for v, w in zip(memoryview(reference[lo:hi]).cast("I"), memoryview(modded[lo:hi]).cast("I")):
+            if data_lo <= v < data_hi:
+                c = held.setdefault(v, [0, 0, collections.Counter()])
+                c[0] += 1
+                if v == w:
+                    c[1] += 1
+                else:
+                    c[2][w] += 1
+    evidence = sorted(held)
+
+    def kept(v: int) -> bool:
+        total, there, _ = held[v]
+        return there * 3 >= total * 2
+
+    def moved_whole(a: int) -> int | None:
+        """The one address every word that held `a` holds now, inside the mod's own memory; else None."""
+        total, there, others = held[a]
+        if there or len(others) != 1 or own is None:
+            return None
+        (new, count), = others.items()
+        return new if count == total and own[0] <= new < own[1] else None
+
+    def data_place(a: int) -> str | None:
+        if a in held:
+            total, there, others = held[a]
+            now = f", {others.most_common(1)[0][1]} of them 0x{others.most_common(1)[0][0]:08x}" if others else ""
+            return None if kept(a) else f"{there} of the {total} words that hold it still do{now}"
+        i = bisect.bisect_left(evidence, a)
+        lo = evidence[i - 1] if i > 0 and a - evidence[i - 1] <= NEIGHBOURS else None
+        hi = evidence[i] if i < len(evidence) and evidence[i] - a <= NEIGHBOURS else None
+        if lo is None or hi is None:
+            return "no word of the code holds it or an address near it"
+        return None if kept(lo) and kept(hi) else "the addresses near it moved"
+
+    out, carried = [], []
+    for a, name in wanted:
+        is_data = data_lo <= a < data_hi
+        why = code_place(a) if text_lo <= (a & ~1) < text_hi else data_place(a) if is_data else None
+        if not why:
+            continue
+        new = moved_whole(a) if is_data and a in held else None
+        if new is not None and a in carriable:
+            carried.append((a, new, name))
+        else:
+            unfollowed = ": the port can't follow a hook or tunable there" if new is not None else ""
+            out.append(f"{name} 0x{a:08x} ({why}{unfollowed})")
+    return out, carried
 
 
 def touched(reference: bytes, modded: bytes, text_base: int, ranges: list[tuple[int, int, str]]) -> list[str]:

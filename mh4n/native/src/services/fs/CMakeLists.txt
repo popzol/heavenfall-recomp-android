@@ -38,6 +38,7 @@ mh4n_module(
         host_files.cpp
         io.cpp
         options.cpp
+        pack_check.cpp
         positioned_file.cpp
         ${embedded_sources}
     DEPENDS
