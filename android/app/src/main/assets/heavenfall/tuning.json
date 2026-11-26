@@ -2,6 +2,14 @@
   "format": 2,
   "min_free_download_mb": 700,
   "min_battery_percent": 25,
+  "heat": {
+    "status_percent": [100, 100, 100, 50, 0, 0, 0],
+    "battery_c": [40, 43, 45, 47],
+    "battery_percent": [75, 50, 25, 0],
+    "battery_resume_c": 42,
+    "step_up_margin_c": 1,
+    "step_up_hold_s": 30
+  },
   "expected": {
     "download_kib_s": 3000,
     "apply_kib_s": 25000,

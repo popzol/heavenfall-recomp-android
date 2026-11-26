@@ -56,4 +56,19 @@ public class TuningTest {
         refused(with("\"build_units\"", "\"other\""));
         refused(with("\"build_unit_ms\"", "\"build_object_s\""));
     }
+
+    /**
+     * Catches a heat table that would hide a mistake: no table, a battery list out of order or of another length than its
+     * shares, a share that rises with the heat, a share over 100, text for a number.
+     */
+    @Test
+    public void brokenHeatTable() {
+        refused(with("\"heat\"", "\"warmth\""));
+        refused(with("[40, 43, 45, 47]", "[43, 40, 45, 47]"));
+        refused(with("[40, 43, 45, 47]", "[40, 43, 45]"));
+        refused(with("[75, 50, 25, 0]", "[50, 75, 25, 0]"));
+        refused(with("[100, 100, 100, 50, 0, 0, 0]", "[100, 100, 100, 50, 120, 0, 0]"));
+        refused(with("[100, 100, 100, 50, 0, 0, 0]", "[100, 100, 100, 50, \"0\", 0, 0]"));
+        refused(with("\"step_up_hold_s\": 30", "\"step_up_hold_s\": 3000"));
+    }
 }
