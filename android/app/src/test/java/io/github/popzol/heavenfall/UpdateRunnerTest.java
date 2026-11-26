@@ -415,6 +415,9 @@ public class UpdateRunnerTest {
         assertArrayEquals(files.get(editions.app().repository + "/v1.1.0/" + editions.app().apk), installedApkBytes);
         assertTrue("nothing is left for the new app, so the bar says so",
                 stateKeys().contains("hf_state_job_leave_app_last") && !stateKeys().contains("hf_state_job_leave_app_then"));
+        boolean leaves = false;
+        for (JobProgress p : seen) leaves |= AutoLeave.now(p, true, false);
+        assertTrue("the home screen takes the player out while the install waits (AutoLeave knows the state)", leaves);
         Resume note = Resume.tryParse(new String(Files.readAllBytes(paths.resumeFile.toPath()), StandardCharsets.UTF_8));
         assertNotNull(note);
         assertEquals("v1.1.0", note.appTarget);

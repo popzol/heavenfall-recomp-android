@@ -14,7 +14,9 @@ import com.mh4u.port.HeavenfallBridge;
 import com.mh4u.port.HeavenfallScreens;
 import com.mh4u.port.R;
 
+import io.github.popzol.heavenfall.AutoLeave;
 import io.github.popzol.heavenfall.AutoPlay;
+import io.github.popzol.heavenfall.GameOpen;
 import io.github.popzol.heavenfall.HomeModel;
 import io.github.popzol.heavenfall.HomePresenter;
 import io.github.popzol.heavenfall.JobProgress;
@@ -44,6 +46,8 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
     private boolean resumed;
     /** The app was relaunched by its own pages (PhoenixActivity): the game starts at once when it can. */
     private boolean autoPlay;
+    /** The page is about to take the player out for the app's install (leaveForTheInstall). */
+    private boolean leaving;
 
     private TextView title, versions, state, failureReason, failureAdvice, jobStep, jobTime, jobHint;
     private LinearLayout blocks, notes, jobBox;
@@ -213,6 +217,7 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
         offerAssistant();
         if (resumed && UpdateService.running()) Actions.askNotifications(this);
         render();
+        leaveForTheInstall();
         if (autoPlay && resumed) {   // the first reading after a relaunch of the app's own: it starts the game as the entry did
             autoPlay = false;
             if (AutoPlay.start(true, output)) Actions.play(this, facts);
@@ -228,6 +233,22 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
         } else {
             recompute();
         }
+    }
+
+    /**
+     * Only the app's install is left and it waits for the app to be off the screen: the bar says the app closes, and
+     * after the tuning's moment this page goes to the phone's home screen by itself (AutoLeave). Never with the game
+     * open; a player who comes back while the install still waits is taken out again.
+     */
+    private void leaveForTheInstall() {
+        if (leaving || !AutoLeave.now(UpdateService.progress(), resumed, GameOpen.isOpen())) return;
+        leaving = true;
+        main.postDelayed(() -> {
+            leaving = false;
+            if (destroyed || !AutoLeave.now(UpdateService.progress(), resumed, GameOpen.isOpen())) return;
+            startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        }, Config.tuning(this).appLeaveShowSeconds * 1000L);
     }
 
     private void offerAssistant() {

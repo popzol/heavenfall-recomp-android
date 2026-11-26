@@ -111,8 +111,8 @@
     <string name="hf_state_job_idle">Nothing is being updated</string>
     <string name="hf_state_job_checking">Checking for updates…</string>
     <string name="hf_state_job_installing_app">Installing the new version of the app…</string>
-    <string name="hf_state_job_leave_app_last">Everything is ready. The app updates when you leave it: press the Home button.</string>
-    <string name="hf_state_job_leave_app_then">The app updates when you leave it: press the Home button. The rest of the update goes on by itself afterwards.</string>
+    <string name="hf_state_job_leave_app_last">Everything is ready. The app closes now to install its new version.</string>
+    <string name="hf_state_job_leave_app_then">The app closes now to install its new version. The rest of the update goes on by itself afterwards.</string>
     <string name="hf_state_job_confirm_install">Confirm the install on the screen to go on</string>
     <string name="hf_state_job_restarting">The app is restarting to finish the update…</string>
     <string name="hf_state_job_done">The update is done</string>
@@ -158,7 +158,7 @@
     <string name="hf_fail_build_install">The game\'s code could not be saved in its folder</string>
     <string name="hf_fail_build_failed">The game\'s code could not be built</string>
     <string name="hf_advice_resume">Try again: it goes on from where it stopped.</string>
-    <string name="hf_advice_leave_the_app">Press Update again and leave the app when it asks.</string>
+    <string name="hf_advice_leave_the_app">Press Update again: the app closes by itself to install.</string>
     <string name="hf_advice_close_game">Close the game first, then come back here.</string>
     <string name="hf_advice_download_again">The file was not used. Try again to download it.</string>
     <string name="hf_advice_other_signer">Install Heavenfall again from its official page: this copy came from another source.</string>

@@ -4,6 +4,7 @@
   "min_battery_percent": 25,
   "app_leave_quiet_s": 3,
   "app_leave_wait_max_s": 1800,
+  "app_leave_show_s": 2,
   "heat": {
     "status_percent": [100, 100, 100, 50, 0, 0, 0],
     "battery_c": [40, 43, 45, 47],

@@ -16,7 +16,7 @@
 - The game's code is built on the phone; a newer mod rebuilds only the parts that changed.
 - A job goes on in the background with a notification, and Resume picks it up after a restart.
 - A build the phone stops is tried once more by itself, and its log says where it stopped.
-- The app updates itself, and installs its new version only after you leave it, never during a game.
+- The app updates itself: once the rest is done, it closes by itself to install, never during a game.
 - The mod comes with single-screen mode on and the HUD at its full size.
 - It installs beside 4u-native as an app of its own: "Heavenfall", application id `io.github.popzol.heavenfall`.
 - Test builds are "Heavenfall test", application id `io.github.popzol.heavenfall.test`: they never replace your install.
@@ -767,7 +767,7 @@ came with ads, it isn't the official one. Check the APK's SHA-256 against the re
 - El código del juego se compila en el móvil; un mod más nuevo solo recompila las partes que cambiaron.
 - Una tarea sigue en segundo plano con una notificación, y Continuar la retoma tras un reinicio.
 - Una compilación que el móvil corta se intenta otra vez sola, y su registro dice dónde se paró.
-- La app se actualiza sola, e instala su versión nueva solo cuando sales de ella, nunca durante una partida.
+- La app se actualiza sola: cuando el resto está hecho, se cierra sola para instalarse, nunca durante una partida.
 - El mod viene con el modo de pantalla única activado y el HUD a su tamaño completo.
 - Se instala junto a 4u-native como app aparte: "Heavenfall", identificador `io.github.popzol.heavenfall`.
 - Las versiones de prueba se llaman "Heavenfall test", con identificador `io.github.popzol.heavenfall.test`: nunca reemplazan tu instalación.

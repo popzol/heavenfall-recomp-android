@@ -34,8 +34,8 @@ y dice qué falla.
 
 - **Instalar:** descarga los archivos del mod, hace el mod con tus volcados y arma el código del juego.
 - **Actualizar a una versión:** lo mismo para una app nueva, un mod nuevo o ambos. La primera vez la app pide
-  permiso para instalarse a sí misma y te enseña cómo darlo. Cuando la app misma es nueva, instala su versión nueva solo
-  después de que salgas de ella (la barra dice cuándo; nunca se cierra mientras estás dentro), lo que quede sigue en las
+  permiso para instalarse a sí misma y te enseña cómo darlo. Cuando la app misma es nueva, primero hace todo lo demás;
+  después se cierra sola para instalar su versión nueva (nunca con el juego abierto), lo que quede sigue en las
   notificaciones y una última notificación dice cómo terminó (tócala para abrir la app).
 - **Construir:** arma solo el código del juego otra vez (falta, o se hizo para otro mod). En Más también están Construir de nuevo
   y Reinstalar el mod.

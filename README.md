@@ -32,9 +32,9 @@ dump your own game decrypted from your 3DS (for example with GodMode9). The app 
 
 - **Install:** downloads the mod's files, makes the mod from your dumps and builds the game's code.
 - **Update to a version:** the same for a newer app, a newer mod or both. The app asks to be allowed to install itself the
-  first time, and shows how to do it. When the app itself is new, it installs its new version only after you leave it
-  (the bar says when; it never closes while you are in it), whatever is left goes on in the notifications, and a last
-  notification says how it ended (tap it to open the app).
+  first time, and shows how to do it. When the app itself is new, everything else is done first; then the app closes by
+  itself to install its new version (never with the game open), whatever is left goes on in the notifications, and a
+  last notification says how it ended (tap it to open the app).
 - **Build:** builds only the game's code again (it is missing, or it was made for another mod). More has Build again and
   Reinstall too.
 - **Reinstall:** the mod's files on the phone were changed or are gone: the mod is made again before anything is built
