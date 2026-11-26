@@ -34,17 +34,27 @@ y dice qué falla.
 
 - **Instalar:** descarga los archivos del mod, hace el mod con tus volcados y arma el código del juego.
 - **Actualizar a una versión:** lo mismo para una app nueva, un mod nuevo o ambos. La primera vez la app pide
-  permiso para instalarse a sí misma y te enseña cómo darlo. Después se reemplaza y sigue.
+  permiso para instalarse a sí misma y te enseña cómo darlo. Cuando la app misma es nueva, avisa antes de que se va a
+  cerrar: se reemplaza, la actualización sigue en las notificaciones y una última notificación dice cómo terminó (tócala
+  para abrir la app).
 - **Construir:** arma solo el código del juego otra vez (falta, o se hizo para otro mod). En Más también están Construir de nuevo
   y Reinstalar el mod.
-- **Continuar:** sigue donde se detuvo un trabajo. Lo que ya se hizo no se repite.
+- **Reinstalar:** los archivos del mod en el teléfono cambiaron o ya no están: el mod se hace de nuevo antes de armar o
+  jugar nada.
+- **Continuar:** sigue donde se detuvo un trabajo. Lo que ya se hizo no se repite. Jugar sigue a su lado mientras el
+  juego instalado pueda arrancar, y Descartar borra lo que dejó el trabajo (el juego instalado se queda).
 - **Jugar:** arranca el juego.
 
 **Cuánto tarda.** Descargar el mod tarda minutos. Armar el código del juego es lo largo: puede llevar muchos minutos y, en
 un teléfono modesto, horas. Deja el teléfono enchufado y, si quieres, la app en segundo plano: el trabajo sigue, con una
 notificación (Android 13 y posteriores preguntan antes si se muestra; el trabajo corre igual sin ella), y la primera
-pantalla muestra el tiempo que falta. Si el teléfono se reinicia o cancelas, Continuar sigue desde donde quedó. Armar
-necesita espacio libre y memoria: la app avisa antes de empezar si el teléfono tiene poco.
+pantalla muestra el tiempo que falta. Si el teléfono se reinicia o cancelas, Continuar sigue desde donde quedó. Un armado
+posterior para una versión nueva del mod reutiliza las partes que no cambiaron, así que tarda minutos. Armar necesita
+espacio libre y memoria: la app avisa antes de empezar si el teléfono tiene poco.
+
+**Android 9 y 10.** En estas versiones la app guarda todo lo suyo, tu partida incluida, donde ninguna otra app puede
+leerlo. Para sacar tu partida o volver a ponerla, usa Ajustes, Sistema, Tu partida: Exportar partida o
+Carpeta de partidas.
 
 El código del juego se queda en tu teléfono: no lo compartas nunca.
 
@@ -81,15 +91,32 @@ sh scripts/build_sdl3.sh    # SDL 3.4.18 desde su release, una vez
 sh scripts/build_apk.sh     # libmain.so, las librerías de hooks, el armado en el teléfono y después Gradle
 ```
 
+Gradle arma la librería nativa propia de la app (`libheavenfall.so`) con el CMake 3.22.1 del SDK: instálalo con el
+gestor del SDK (`sdkmanager "cmake;3.22.1"`), o indica otro CMake con `cmake.dir` en `android/local.properties`.
+
 `scripts/android_env.sh` dice dónde se busca cada herramienta. Sin `android/keystore.properties` y `android/mh4u.keystore`
 sale el APK de depuración, `android/app/build/outputs/apk/debug/app-debug.apk`. Las pruebas unitarias:
 `cd android && sh ./gradlew testDebugUnitTest`.
 
-Una versión publicada la hace GitHub Actions (`.github/workflows/build.yml`): un push o un pull request arma el APK de
-depuración y corre las pruebas; una etiqueta `v<versión>` (la de `heavenfall/VERSION`) arma el APK firmado con los secretos
-`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` y `KEY_PASSWORD`, y crea la versión con `Heavenfall-android.apk`,
-`Heavenfall-android.apk.sha256` y `Heavenfall-android-release.json` (los archivos de la versión con la forma de la
-respuesta de GitHub, que la app lee cuando no alcanza la API de GitHub). Sin los cuatro secretos la etiqueta falla: nunca firma con la clave de depuración.
+Una versión publicada la hace GitHub Actions (`.github/workflows/build.yml`) en dos trabajos:
+
+- **build** (cada push, pull request y etiqueta) arma el APK de depuración y corre las pruebas; con una etiqueta
+  `v<versión>` (la de `heavenfall/VERSION`) arma además el APK de la versión, sin firmar. Nunca ve la clave de firma.
+- **release** (solo etiquetas) corre en el entorno de GitHub `release`, y solo para una etiqueta cuyo commit está en
+  `main`. Firma ese APK con los secretos del entorno `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` y
+  `KEY_PASSWORD`, lo comprueba (alineado a 16 KB, la firma, nunca la clave de depuración) y crea la versión con
+  `Heavenfall-android.apk`, `Heavenfall-android.apk.sha256` y `Heavenfall-android-release.json` (los archivos de la
+  versión con la forma de la respuesta de GitHub, que la app lee cuando no alcanza la API de GitHub). Sin los cuatro
+  secretos falla: nunca firma con la clave de depuración.
+
+Una vez, antes de la primera versión, el dueño del repositorio prepara el entorno: Settings, Environments, New
+environment `release`; en Deployment protection rules, Required reviewers (quienes aprueban cada versión) y, en
+Deployment branches and tags, solo las etiquetas `v*`; después los cuatro secretos como secretos del entorno (y
+borrados de los secretos del repositorio). Cada versión espera entonces la aprobación de un revisor antes de firmarse.
+
+Las acciones van fijadas a su commit, el CMake y el Ninja de la CI a los hashes de sus wheels
+(`.github/ci-requirements.txt`) y el wrapper de Gradle a la suma de su distribución (`distributionSha256Sum`); el jar
+del wrapper se comprueba contra el de Gradle.
 
 `app_native/` es la app (SDL3 y Dear ImGui), `android/` su parte de Android, `heavenfall/` lo que es propio de esta versión
 (su versión y su ícono: `python heavenfall/tools/make_icons.py` hace los íconos) y `mh4n/` el runtime y el recompilador

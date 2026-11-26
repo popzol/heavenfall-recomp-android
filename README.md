@@ -32,17 +32,25 @@ dump your own game decrypted from your 3DS (for example with GodMode9). The app 
 
 - **Install:** downloads the mod's files, makes the mod from your dumps and builds the game's code.
 - **Update to a version:** the same for a newer app, a newer mod or both. The app asks to be allowed to install itself the
-  first time, and shows how to do it. Then it replaces itself and goes on.
+  first time, and shows how to do it. When the app itself is new, it says first that it will close: it replaces itself,
+  the update goes on in the notifications, and a last notification says how it ended (tap it to open the app).
 - **Build:** builds only the game's code again (it is missing, or it was made for another mod). More has Build again and
   Reinstall too.
-- **Resume:** goes on where a job stopped. What was done is not done again.
+- **Reinstall:** the mod's files on the phone were changed or are gone: the mod is made again before anything is built
+  or played.
+- **Resume:** goes on where a job stopped. What was done is not done again. Play stays beside it while the installed
+  game can start, and Discard drops what the job left (the installed game stays).
 - **Play:** starts the game.
 
 **How long it takes.** Downloading the mod takes minutes. Building the game's code is the long part: it can take many
 minutes and, on a modest phone, hours. Keep the phone plugged in and leave the app in the background if you like: the
 job goes on, with a notification (Android 13 and later ask first whether to show it; the job runs the same without it),
 and the first screen shows the time left. If the phone restarts or the job is cancelled, Resume goes on from where it
-stopped. Building needs free space and memory: the app says so before it starts if the phone has too little.
+stopped. A later build for a new mod version reuses the parts that did not change, so it takes minutes. Building needs
+free space and memory: the app says so before it starts if the phone has too little.
+
+**Android 9 and 10.** On these versions the app keeps everything of its own, your save included, where no other app can
+read it. To copy your save out or back, use Settings, System, Your game: Export save or Save folder.
 
 The game's code stays on your phone: never share it.
 
@@ -79,16 +87,32 @@ sh scripts/build_sdl3.sh    # SDL 3.4.18 from its release, once
 sh scripts/build_apk.sh     # libmain.so, the hook libraries, the on-phone builder's launchers and tools, then Gradle
 ```
 
+Gradle builds the app's own native library (`libheavenfall.so`) with the SDK's CMake 3.22.1: install it with the SDK
+manager (`sdkmanager "cmake;3.22.1"`), or name another CMake with `cmake.dir` in `android/local.properties`.
+
 `scripts/android_env.sh` says where each tool is looked for. Without `android/keystore.properties` and
 `android/mh4u.keystore` you get the debug APK, `android/app/build/outputs/apk/debug/app-debug.apk`. The unit tests:
 `cd android && sh ./gradlew testDebugUnitTest`.
 
-A release is made by GitHub Actions (`.github/workflows/build.yml`): a push or a pull request builds the debug APK and
-runs the tests; a tag `v<version>` (the version in `heavenfall/VERSION`) builds the release APK signed with the secrets
-`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`, and creates the release with
-`Heavenfall-android.apk`, `Heavenfall-android.apk.sha256` and `Heavenfall-android-release.json` (the release's files in
-the shape of GitHub's own answer, which the app reads when GitHub's API is out of reach). Without the four secrets the tag build fails: it never signs
-with the debug key.
+A release is made by GitHub Actions (`.github/workflows/build.yml`) in two jobs:
+
+- **build** (every push, pull request and tag) builds the debug APK and runs the tests; on a tag `v<version>` (the
+  version in `heavenfall/VERSION`) it also builds the release APK, unsigned. It never sees the signing key.
+- **release** (tags only) runs in the GitHub environment `release`, and only for a tag whose commit is on `main`. It
+  signs that APK with the environment's secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and
+  `KEY_PASSWORD`, checks it (16 KB alignment, the signature, never the debug key) and creates the release with
+  `Heavenfall-android.apk`, `Heavenfall-android.apk.sha256` and `Heavenfall-android-release.json` (the release's files
+  in the shape of GitHub's own answer, which the app reads when GitHub's API is out of reach). Without the four secrets
+  it fails: it never signs with the debug key.
+
+Once, before the first release, the repository's owner sets the environment up: Settings, Environments, New
+environment `release`; under Deployment protection rules, Required reviewers (the people who approve each release) and,
+under Deployment branches and tags, the tags `v*` only; then the four secrets as the environment's secrets (and
+deleted from the repository's secrets). Each release then waits for a reviewer's approval before it is signed.
+
+The actions are pinned to their commits, the CI's CMake and Ninja to their wheels' hashes
+(`.github/ci-requirements.txt`), and the Gradle wrapper to its distribution's checksum (`distributionSha256Sum`); the
+wrapper's jar is checked against Gradle's own.
 
 `app_native/` is the app (SDL3 and Dear ImGui), `android/` its Android side, `heavenfall/` what is this version's own
 (its version and its icon: `python heavenfall/tools/make_icons.py` makes the launcher icons), and `mh4n/` the runtime and
