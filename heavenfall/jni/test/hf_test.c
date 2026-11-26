@@ -294,31 +294,31 @@ static void test_identify(void) {
     HfIdentity id;
     char hex[65];
     begin();
-    id = identify("game.cxi");
+    id = identify("made_up_game.cxi.bin");
     CHECK(id.kind == HF_KIND_GAME && id.region == REGION_USA && !id.encrypted && id.has_revision);
-    id = identify("game_eur.cxi");
+    id = identify("made_up_game_eur.cxi.bin");
     CHECK(id.kind == HF_KIND_GAME && id.region == REGION_EUR);
-    id = identify("xx.cxi");
+    id = identify("made_up_xx.cxi.bin");
     CHECK(id.kind == HF_KIND_XX && id.region == REGION_JPN && !id.encrypted && id.has_revision);
     end("identify: the American game, the European game and MH XX are told apart (a wrong region could pass as the right one)");
 
     begin();
-    id = identify("update.cia");
+    id = identify("made_up_update.cia.bin");
     hex_of(id.revision, hex);
     CHECK(id.kind == HF_KIND_UPDATE && id.region == REGION_USA && !id.encrypted && id.has_revision);
     CHECK(!strcmp(hex, update_exefs));            /* the exact update's identity is the set's own hash */
-    id = identify("update.cxi");
+    id = identify("made_up_update.cxi.bin");
     hex_of(id.revision, hex);
     CHECK(id.kind == HF_KIND_UPDATE && !strcmp(hex, update_exefs));
-    id = identify("update_other.cia");
+    id = identify("made_up_update_other.cia.bin");
     hex_of(id.revision, hex);
     CHECK(id.kind == HF_KIND_UPDATE && strcmp(hex, update_exefs));
-    id = identify("update_eur.cia");
+    id = identify("made_up_update_eur.cia.bin");
     CHECK(id.kind == HF_KIND_UPDATE && id.region == REGION_EUR);
     end("identify: the update as a CIA and as a bare NCCH gives one identity, another revision another one (a wrong update could pass)");
 
     begin();
-    id = identify("update_locked.cia");
+    id = identify("made_up_update_locked.cia.bin");
     CHECK(id.kind == HF_KIND_UPDATE && id.encrypted && !id.has_revision);
     id = identify("junk.bin");
     CHECK(id.kind == HF_KIND_NONE && id.rc == TITLE_E_FORMAT);
@@ -332,7 +332,7 @@ static void test_identify(void) {
     {
         char text[512];
         size_t n;
-        id = identify("update.cia");
+        id = identify("made_up_update.cia.bin");
         n = hf_identify_text(&id, text, sizeof text);
         CHECK(n == strlen(text) && strstr(text, "kind=update\n") && strstr(text, "region=usa\n") && strstr(text, update_exefs));
         n = hf_identify_text(&id, text, 10);
@@ -405,7 +405,7 @@ static void test_apply_makes_the_mod(void) {
     char cdir[1024], out[1024];
     Watch w;
     HfResult r;
-    Inputs in = {"android.hfpatch", "game.cxi", "update.cia", NULL, "shared.hfpack", 1, -1};
+    Inputs in = {"android.hfpatch", "made_up_game.cxi.bin", "made_up_update.cia.bin", NULL, "shared.hfpack", 1, -1};
     begin();
     fresh("plain", cdir, out);
     r = run_apply(&in, out, &w);
@@ -424,7 +424,7 @@ static void test_apply_makes_the_mod(void) {
     end("apply: the progress goes up, never past the total, and ends at the total");
 
     begin();
-    in.update = "update.cxi";
+    in.update = "made_up_update.cxi.bin";
     fresh("bare", cdir, out);
     r = run_apply(&in, out, &w);
     CHECK(r.rc == 0);
@@ -432,7 +432,7 @@ static void test_apply_makes_the_mod(void) {
     end("apply: the update as a bare NCCH makes the same mod as the CIA");
 
     begin();
-    in.update = "update.cia";
+    in.update = "made_up_update.cia.bin";
     in.verify = 0;
     fresh("noverify", cdir, out);
     r = run_apply(&in, out, &w);
@@ -445,7 +445,7 @@ static void test_apply_with_xx(void) {
     char cdir[1024], out[1024];
     Watch w;
     HfResult r;
-    Inputs in = {"android_xx.hfpatch", "game.cxi", "update.cia", "xx.cxi", NULL, 1, -1};
+    Inputs in = {"android_xx.hfpatch", "made_up_game.cxi.bin", "made_up_update.cia.bin", "made_up_xx.cxi.bin", NULL, 1, -1};
     begin();
     fresh("xx", cdir, out);
     r = run_apply(&in, out, &w);
@@ -461,7 +461,7 @@ static void test_apply_with_xx(void) {
     end("apply: a set that needs MH XX without it is refused before any file is made");
 
     begin();
-    in.xx = "game.cxi";           /* MH4U given as MH XX */
+    in.xx = "made_up_game.cxi.bin";           /* MH4U given as MH XX */
     fresh("wrongxx", cdir, out);
     r = run_apply(&in, out, &w);
     CHECK(r.rc == TITLE_E_GAME && r.stage == HF_STAGE_XX && count_entries(out) == 0);
@@ -470,8 +470,8 @@ static void test_apply_with_xx(void) {
 
 static void test_wrong_update(void) {
     static const struct { const char *update; int rc; } cases[] = {
-        {NULL, TITLE_E_NO_UPDATE}, {"update_eur.cia", TITLE_E_OTHER_UPDATE}, {"update_other.cia", TITLE_E_OTHER_UPDATE},
-        {"game.cxi", TITLE_E_NOT_UPDATE}, {"update_locked.cia", TITLE_E_ENCRYPTED}};
+        {NULL, TITLE_E_NO_UPDATE}, {"made_up_update_eur.cia.bin", TITLE_E_OTHER_UPDATE}, {"made_up_update_other.cia.bin", TITLE_E_OTHER_UPDATE},
+        {"made_up_game.cxi.bin", TITLE_E_NOT_UPDATE}, {"made_up_update_locked.cia.bin", TITLE_E_ENCRYPTED}};
     size_t i;
     begin();
     for (i = 0; i < sizeof cases / sizeof *cases; i++) {
@@ -479,7 +479,7 @@ static void test_wrong_update(void) {
         Watch w;
         HfResult r;
         Inputs in;
-        in.set = "android.hfpatch"; in.game = "game.cxi"; in.update = cases[i].update; in.xx = NULL;
+        in.set = "android.hfpatch"; in.game = "made_up_game.cxi.bin"; in.update = cases[i].update; in.xx = NULL;
         in.shared = "shared.hfpack"; in.verify = 1; in.cancel_at = -1;
         fresh("wrongupdate", cdir, out);
         r = run_apply(&in, out, &w);
@@ -493,7 +493,7 @@ static void test_bad_sets(void) {
     char cdir[1024], out[1024];
     Watch w;
     HfResult r;
-    Inputs in = {"set_cut.hfpatch", "game.cxi", "update.cia", NULL, "shared.hfpack", 1, -1};
+    Inputs in = {"set_cut.hfpatch", "made_up_game.cxi.bin", "made_up_update.cia.bin", NULL, "shared.hfpack", 1, -1};
     begin();
     fresh("cut", cdir, out);
     r = run_apply(&in, out, &w);
@@ -504,7 +504,7 @@ static void test_bad_sets(void) {
     {
         int set = copy_of("android.hfpatch", 4000, -1, "set_flipped.hfpatch");
         fresh("flipped", cdir, out);
-        r = run_with_fds(set, fixture("game.cxi"), fixture("update.cia"), -1, fixture("shared.hfpack"), out);
+        r = run_with_fds(set, fixture("made_up_game.cxi.bin"), fixture("made_up_update.cia.bin"), -1, fixture("shared.hfpack"), out);
         CHECK(r.rc == TITLE_E_FORMAT && r.stage == HF_STAGE_SET && count_entries(out) == 0);
     }
     end("apply: a set with one byte changed is refused by its own hash, nothing is made");
@@ -535,22 +535,22 @@ static void test_bad_inputs(void) {
     char cdir[1024], out[1024];
     Watch w;
     HfResult r;
-    Inputs in = {"android.hfpatch", "game.cxi", "update.cia", NULL, "shared.hfpack", 1, -1};
+    Inputs in = {"android.hfpatch", "made_up_game.cxi.bin", "made_up_update.cia.bin", NULL, "shared.hfpack", 1, -1};
     begin();
     {
-        int game = copy_of("game.cxi", flip_offset, -1, "game_flipped.cxi");
+        int game = copy_of("made_up_game.cxi.bin", flip_offset, -1, "game_flipped.cxi");
         fresh("badgame", cdir, out);
-        r = run_with_fds(fixture("android.hfpatch"), game, fixture("update.cia"), -1, fixture("shared.hfpack"), out);
+        r = run_with_fds(fixture("android.hfpatch"), game, fixture("made_up_update.cia.bin"), -1, fixture("shared.hfpack"), out);
         CHECK(r.rc == TITLE_E_HASH && r.stage == HF_STAGE_GAME && r.source_kind == PS_SRC_FILE && count_entries(out) == 0);
     }
     end("apply: a game with one changed byte is refused by the source check, before any file is made");
 
     begin();
     {
-        int game = copy_of("game.cxi", flip_offset, -1, "game_flipped.cxi");
+        int game = copy_of("made_up_game.cxi.bin", flip_offset, -1, "game_flipped.cxi");
         HfApplyArgs a;
         memset(&a, 0, sizeof a);
-        a.set_fd = fixture("android.hfpatch"); a.game_fd = game; a.update_fd = fixture("update.cia");
+        a.set_fd = fixture("android.hfpatch"); a.game_fd = game; a.update_fd = fixture("made_up_update.cia.bin");
         a.xx_fd = -1; a.shared_fd = fixture("shared.hfpack");
         a.verify_sources = 0;
         fresh("badgame2", cdir, out);
@@ -566,7 +566,7 @@ static void test_bad_inputs(void) {
     {
         int shared = copy_of("shared.hfpack", 50000, -1, "shared_flipped.hfpack");
         fresh("badshared", cdir, out);
-        r = run_with_fds(fixture("android.hfpatch"), fixture("game.cxi"), fixture("update.cia"), -1, shared, out);
+        r = run_with_fds(fixture("android.hfpatch"), fixture("made_up_game.cxi.bin"), fixture("made_up_update.cia.bin"), -1, shared, out);
         CHECK(r.rc == TITLE_E_HASH && r.stage == HF_STAGE_SHARED && count_entries(out) == 0);
     }
     end("apply: a shared file with one changed byte is refused before any file is made");
@@ -580,11 +580,11 @@ static void test_bad_inputs(void) {
 
     begin();
     in.shared = "shared.hfpack";
-    in.game = "game_eur.cxi";
+    in.game = "made_up_game_eur.cxi.bin";
     fresh("eurgame", cdir, out);
     r = run_apply(&in, out, &w);
     CHECK(r.rc == TITLE_E_GAME && r.stage == HF_STAGE_GAME && count_entries(out) == 0);
-    in.game = "xx.cxi";
+    in.game = "made_up_xx.cxi.bin";
     fresh("xxgame", cdir, out);
     r = run_apply(&in, out, &w);
     CHECK(r.rc != 0 && r.stage == HF_STAGE_GAME && count_entries(out) == 0);
@@ -594,12 +594,12 @@ static void test_bad_inputs(void) {
     fresh("badfd", cdir, out);
     r = run_with_fds(-1, -1, -1, -1, -1, out);
     CHECK(r.rc == TITLE_E_ARG);
-    r = run_with_fds(9999, fixture("game.cxi"), fixture("update.cia"), -1, fixture("shared.hfpack"), out);
+    r = run_with_fds(9999, fixture("made_up_game.cxi.bin"), fixture("made_up_update.cia.bin"), -1, fixture("shared.hfpack"), out);
     CHECK(r.rc == HF_E_READ && r.stage == HF_STAGE_SET && r.err != 0);
     end("apply: a descriptor that cannot be read is 'could not read', with its errno, not a bad set");
 
     begin();
-    in.game = "game.cxi";
+    in.game = "made_up_game.cxi.bin";
     path_of(cdir, sizeof cdir, work, "missing_folder");
     rmtree(cdir);
     path_of(out, sizeof out, cdir, "out");
@@ -612,7 +612,7 @@ static void test_cancel(void) {
     char cdir[1024], out[1024];
     Watch w;
     HfResult r;
-    Inputs in = {"android.hfpatch", "game.cxi", "update.cia", NULL, "shared.hfpack", 1, -1};
+    Inputs in = {"android.hfpatch", "made_up_game.cxi.bin", "made_up_update.cia.bin", NULL, "shared.hfpack", 1, -1};
     long total, k;
     begin();
     fresh("count", cdir, out);
@@ -642,7 +642,7 @@ static void test_result_text(void) {
     char cdir[1024], out[1024], text[1024];
     Watch w;
     HfResult r;
-    Inputs in = {"android.hfpatch", "game.cxi", "update.cia", NULL, "shared.hfpack", 1, -1};
+    Inputs in = {"android.hfpatch", "made_up_game.cxi.bin", "made_up_update.cia.bin", NULL, "shared.hfpack", 1, -1};
     begin();
     fresh("text", cdir, out);
     r = run_apply(&in, out, &w);

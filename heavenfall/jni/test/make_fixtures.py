@@ -10,8 +10,11 @@ from the mod folder for plain files and from Heavenfall's reference driver (test
 built here with the host gcc) for the ARCs, whose deflated bytes only a deflate gives (the entries are checked equal
 to the mod's first). Run it again only when the writer's format changes; the fixtures are committed.
 
-Files written to the fixtures folder: the dumps (game.cxi, update.cia, update.cxi, update_eur.cia, update_other.cia,
-update_locked.cia, game_eur.cxi, xx.cxi, junk.bin), the sets (android.hfpatch with the shared file shared.hfpack,
+Files written to the fixtures folder: the dumps, named made_up_<name>.<cxi or cia>.bin (the repository's .gitignore
+drops *.cxi and *.cia, which a made-up dump must not be dropped as; the name also says it is made up): made_up_game.cxi.bin,
+made_up_game_eur.cxi.bin, made_up_update.cia.bin, made_up_update.cxi.bin, made_up_update_eur.cia.bin,
+made_up_update_other.cia.bin, made_up_update_locked.cia.bin, made_up_xx.cxi.bin; then junk.bin, the sets (android.hfpatch
+with the shared file shared.hfpack,
 android_xx.hfpatch, format3.hfpatch, set_newer.hfpatch, set_cut.hfpatch, bad_path.hfpatch) and expected.txt:
 
     tree <set> <path> <size> <sha256>     every file the set makes
@@ -91,15 +94,15 @@ def main() -> None:
     exe = build_reference_driver()
     lines = []
 
-    game = make_game(fixtures / "game.cxi", titles.MH4U_USA)
+    game = make_game(fixtures / "made_up_game.cxi.bin", titles.MH4U_USA)
     (work / "game.cxi").write_bytes(game.read_bytes())            # the mods' helper reads its exheader from here
-    update = make_update(fixtures / "update.cia")
-    make_update(fixtures / "update.cxi", form="ncch")
-    make_update(fixtures / "update_eur.cia", titles.MH4U_EUR_UPDATE)
-    make_update(fixtures / "update_locked.cia", encrypted=True)
-    make_update(fixtures / "update_other.cia", code=blz_compress(UPDATE_PREFIX, UPDATE_TAIL[:-3] + b"abc"))
-    make_game(fixtures / "game_eur.cxi", titles.MH4U_EUR)
-    xx = make_xx(fixtures / "xx.cxi")
+    update = make_update(fixtures / "made_up_update.cia.bin")
+    make_update(fixtures / "made_up_update.cxi.bin", form="ncch")
+    make_update(fixtures / "made_up_update_eur.cia.bin", titles.MH4U_EUR_UPDATE)
+    make_update(fixtures / "made_up_update_locked.cia.bin", encrypted=True)
+    make_update(fixtures / "made_up_update_other.cia.bin", code=blz_compress(UPDATE_PREFIX, UPDATE_TAIL[:-3] + b"abc"))
+    make_game(fixtures / "made_up_game_eur.cxi.bin", titles.MH4U_EUR)
+    xx = make_xx(fixtures / "made_up_xx.cxi.bin")
     (fixtures / "junk.bin").write_bytes(b"this is not a game container\n" * 200)
 
     # the plain set (the Beta's shape): the game, its update and the release's shared file
@@ -133,10 +136,10 @@ def main() -> None:
     (fixtures / "bad_path.hfpatch").write_bytes(retabled(blob, b"romfs/new/fresh.bin", b"../../new/fresh.bin"))
 
     # a byte inside a source file of each dump, for the test to flip in a copy
-    data = (fixtures / "game.cxi").read_bytes()
+    data = (fixtures / "made_up_game.cxi.bin").read_bytes()
     at = data.find(PLAIN[1000:1016])
     assert at > 0 and data.count(PLAIN[1000:1016]) == 1
-    lines.append(f"flip game.cxi {at + 12}")      # past the 8 bytes the mod patches there: the output changes too
+    lines.append(f"flip made_up_game.cxi.bin {at + 12}")      # past the 8 bytes the mod patches there: the output changes too
     lines.append("sha256 update_exefs " + exefs_hash_of(update).hex())
     lines.append("sha256 update_code_len " + str(len(UPDATE_CODE)))
     (fixtures / "expected.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")

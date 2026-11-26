@@ -34,6 +34,6 @@ tree android_xx romfs/new/fresh.bin 4000 a8d200b4602ff33bc2b3369932fb23c821aa9ab
 tree android_xx romfs/new/moved.bin 70000 3385f58b0ae23c27635d453f07cf9fa278ed0fdbd9489216404febbed7db378b
 tree android_xx romfs/new/text.bin 15000 6c4aa0e309c4b4e190264c0c2fb6037bc2c4633e87ae4a2f679cdd4e37886af9
 tree android_xx romfs/new/xx_alone.bin 5100 670475c7c1a6a4e6ecca56f87264d8ae23ad1f7f6df18eb69ff1fcb93c11da08
-flip game.cxi 51636
+flip made_up_game.cxi.bin 51636
 sha256 update_exefs dc35e7f654a1c35419fa3b9e727bfc7c6d35d0918f0170b979b75f21706cd81b
 sha256 update_code_len 30890
