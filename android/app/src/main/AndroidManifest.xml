@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:installLocation="auto">
+
+    <uses-feature android:name="android.hardware.vulkan.version" android:version="0x401000" android:required="true" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <!-- Android 9 and 10: Settings -> Save folder writes the save in a folder the player chooses -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- the on-phone builder (BuilderService): it goes on in the background, with a notification, and keeps the CPU awake -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- allowNativeHeapPointerTagging=false: the runtime turns host pointers into 32-bit guest addresses and does not
+         expect the tag Android puts in the top byte of malloc's pointers on arm64.
+         extractNativeLibs: the game's code library is opened by path with dlopen.
+         hasFragileUserData: on uninstall Android offers to keep the data (the saves are there). -->
+    <application android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:theme="@style/AppTheme"
+        android:enableOnBackInvokedCallback="false"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true"
+        android:isGame="true"
+        android:appCategory="game"
+        android:extractNativeLibs="true"
+        android:allowNativeHeapPointerTagging="false"
+        android:hasFragileUserData="true"
+        android:requestLegacyExternalStorage="true">
+
+        <meta-data android:name="SDL_ENV.SDL_ANDROID_TRAP_BACK_BUTTON" android:value="1" />
+        <meta-data android:name="android.game_mode_config" android:resource="@xml/game_mode_config" />
+
+        <!-- resizeableActivity: a window that changes size (Samsung DeX maximized, split screen, a foldable opened) is
+             drawn again at its new size (app_native/android_main.cpp, SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED); not resizeable,
+             DeX restarted the game's process to resize it, a start that skips the entry, and the game started over and
+             over (4u-native #40) -->
+        <activity android:name=".GameActivity"
+            android:label="@string/app_name"
+            android:alwaysRetainTaskState="true"
+            android:launchMode="singleInstance"
+            android:screenOrientation="sensorLandscape"
+            android:resizeableActivity="true"
+            android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density"
+            android:preferMinimalPostProcessing="true"
+            android:exported="true">
+            <!-- a USB controller plugged in: Android offers the game, and lets it read the controller (as MHGU's) -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+        </activity>
+
+        <!-- The entry: starts the game, or shows which files are needed and lets the player choose their folder -->
+        <activity android:name=".GameFolderActivity"
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:excludeFromRecents="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.GAME" />
+            </intent-filter>
+        </activity>
+
+        <!-- Share the log: in a process of its own, alive when the game's has closed because of an error -->
+        <activity android:name=".LogShareActivity"
+            android:process=":share"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+        <provider android:name=".LogProvider"
+            android:authorities="com.mh4u.native.logs"
+            android:process=":share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <activity android:name=".SaveActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+        <!-- Settings -> Shortcut with your image (S56): a pinned shortcut with the player's picture -->
+        <activity android:name=".ShortcutActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+        <!-- Settings -> Import DLC and event quests (S37): the player's own quest files, applied at the next start -->
+        <activity android:name=".ExtraImportActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+        <!-- Settings -> Save folder (and the start gate's "Choose folder") -->
+        <activity android:name=".SaveFolderActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
+        <!-- A restart (an imported save): no screen, in its own process, it waits for the game's to end and launches the app -->
+        <activity android:name=".PhoenixActivity"
+            android:process=":phoenix"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
+        <!-- Import a GPU driver (Settings, Graphics & Audio): the file picker, then a plate over the game while the .zip
+             is unpacked into the app's files (app_native/gpu_driver.cpp chooses and loads it) -->
+        <activity android:name=".DriverActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
+        <!-- Ajustes -> Perfiles de controles -> un perfil -> Exportar / Importar (el .zip del perfil, 1.0.2) -->
+        <activity android:name=".ProfileZipActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:exported="false" />
+
+        <!-- The layout editor's Picture -> Add pictures: the players' own pictures for the touch buttons (PicturesActivity) -->
+        <activity android:name=".PicturesActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:exported="false" />
+
+        <!-- Import cheats or a mod (Settings, Cheats / Mods): the file picker, then a plate over the game while it is copied
+             into the user folder (app_native/content.cpp reads the outcome) -->
+        <activity android:name=".ImportActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
+        <!-- Build the game code on the phone (Settings, Game folder): the screen, and the service that builds in the
+             background (the downloaded CPython and Zig run through the launchers libpyrun.so and libzigcc.so of the
+             native library folder; app_native/builder/toolrun.c) -->
+        <activity android:name=".BuilderActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+        <service android:name=".BuilderService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
+        <activity android:name=".LicensesActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+    </application>
+</manifest>
