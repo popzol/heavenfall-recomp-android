@@ -6,6 +6,7 @@ whatever the pipeline accepts and checks on a PC it accepts and checks here too.
 
     python3 phone_build.py --update UPDATE.cia [--game GAME.cci] [--game-mods FOLDER | --user-mods USER | --mod FOLDER]
                            --work DIR --dest FOLDER --cc COMPILER [--jobs N] [--expect-id ID] [--clean]
+                           [--cache DIR] [--tuning FILE]
 
 The code mods (they have to be the ones the game will run with): --game-mods, the game folder's mods/ as the app copies
 it to the phone's user folder (the first build: nothing is copied yet); --user-mods, the app's user folder, whose
@@ -24,9 +25,16 @@ Besides build_game.py's own output it prints lines for the app, each starting wi
     @@error NAME MESSAGE        the stage that failed and why (the last line of a failed run)
     @@done PATH                 the library is in place, with its .id beside it
 
-Resuming: the work folder stays between runs. The recompiled C is written only where it changed and an object is
-compiled again only when its C is newer (tools/recomp/build.py), so a run cut short (the app closed, the phone too hot,
-no battery) goes on from the objects already made; an object the cut left half written is found here and made again.
+Memory and space (config/build_tuning.json, tools/build_tuning.py): before anything, the space a build needs is checked
+(the objects' cache gives up its oldest objects when that makes room); before the translation, its memory; while
+compiling, as many compiles run as the memory available holds (--jobs the most), and one the system stops for its
+memory is compiled again alone, then one function per file (tools/recomp/jobs.py).
+
+Resuming: the work folder stays between runs. The recompiled C is written only where it changed and every object goes
+into the objects' cache (--cache, beside the work folder: --clean leaves it) as it is made, keyed by its C, flags and
+compiler (tools/recomp/objcache.py), so a run cut short (the app closed, the phone too hot, no battery) goes on from
+the objects already made, and a new version of a mod compiles only the C it changed; an object the cut left half
+written is found here and made again.
 The library reaches --dest only whole (written beside it, then renamed), with its .id.
 The stages before the compile (the extraction, the code mods, the analysis and the translation to C with its function
 list, the geometry shaders: minutes of every core on a phone) are done again only when what they are made from changed:
@@ -60,10 +68,13 @@ sys.path.insert(0, TOOLS)
 
 import build_game  # noqa: E402
 
+import build_tuning  # noqa: E402
+from recomp import jobs as compile_jobs  # noqa: E402
+from recomp import objcache  # noqa: E402
+
 TITLE = "0004000000126300"
 LIBRARY = "libmh4u_code_native.so"
-# room the work folder needs: the recompiled C (about 330 MB), its objects (140 MB) and Zig's copies of them (140 MB)
-WORK_SPACE = 800 << 20
+CACHE = "object-cache"   # the objects' cache, beside the work folder (which --clean deletes)
 
 
 def emit(line: str) -> None:
@@ -379,61 +390,68 @@ def install(lib: str, dest_dir: str) -> str:
     return pairs[0][1]
 
 
+def folder_bytes(top: str) -> int:
+    total = 0
+    for root, _, files in os.walk(top):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total
+
+
+def space_needed(work: str, cache_dir: str, tuning: dict) -> tuple[int, str]:
+    """The MB of free space the build still lacks (0: it has enough) and the numbers it went by. The build needs
+    config/build_tuning.json's space (build_tuning.space_needed_mb); the work folder's files count as room (a run
+    writes over them or uses them again), and when that isn't enough the objects' cache gives up its oldest objects
+    down to its floor."""
+    need = build_tuning.space_needed_mb(tuning)
+    work_mb = folder_bytes(work) >> 20
+    free_mb = shutil.disk_usage(work).free >> 20
+    dropped = 0
+    if free_mb + work_mb < need and os.path.isdir(cache_dir):
+        c = tuning["cache"]
+        cache = objcache.ObjectCache(cache_dir, c["keep_free_mb"], c["max_mb"], tuning["space"]["cache_floor_mb"])
+        dropped, _ = cache.shrink((need - free_mb - work_mb) << 20)
+        free_mb = shutil.disk_usage(work).free >> 20
+    why = (f"space: the build needs {need} MB; {free_mb} MB free, {work_mb} MB in the work folder"
+           + (f", {dropped} of the objects' cache's oldest objects dropped" if dropped else ""))
+    return max(0, need - free_mb - work_mb), why
+
+
+def memory_check(tuning: dict, meminfo: str = "/proc/meminfo") -> tuple[str | None, str]:
+    """The translation's memory (config/build_tuning.json translation.peak_mb: one process holds the whole code's
+    analysis) against the device's: (the reason it can never fit, or None; a line for the log). A device that has it
+    in all but not free now goes on: Android stops apps in the background to give memory to the one in front, and
+    swap takes the rest (slower). Where /proc/meminfo can't be read (a PC) nothing is checked."""
+    peak = tuning["translation"]["peak_mb"]
+    try:
+        info = compile_jobs.read_meminfo(meminfo)
+    except OSError:
+        return None, f"memory: the translation needs about {peak} MB (not checked here)"
+    total = (info.get("MemTotal", 0) + info.get("SwapTotal", 0)) >> 10
+    free = (info.get("MemAvailable", 0) + info.get("SwapFree", 0)) >> 10
+    line = f"memory: the translation needs about {peak} MB; {free} MB available now, {total} MB in all with swap"
+    if total and total < peak:
+        return (f"the translation of the game's code needs about {peak} MB of memory and this device has {total} MB "
+                f"in all (with its swap)"), line
+    if free < peak:
+        line += " (apps in the background will be stopped to make room, or swap used: slower)"
+    return None, line
+
+
 def lean_recompile() -> None:
-    """The translator's memory, given back as soon as it is no longer read, for a phone's few GB (the same C comes out):
-     - recompile() analyses the code twice, the second time with the entry points found through data pointers, and the
-       first analysis's functions and the sets made from them (every halfword the code covers) stay alive until it
-       returns, through the second analysis and the writing of the C: they go once data_pointer_entries() has used them;
-     - build_game.py keeps recompile()'s result, with every function of the second analysis, until it returns, so
-       through the whole compile, and reads only the report and the problems from it: the functions go as soon as
-       recompile() returns."""
+    """The translator's memory on a phone's few GB (the same C comes out). The translator itself lets go of what it no
+    longer reads (recompile.py: the first analysis's functions and its cover once the data pointers are found, the
+    decoder's cache after the second analysis, each function once its C is written; one copy of each C statement); here,
+    Python's collector of reference cycles is kept off while it runs."""
     import gc
     rc = build_game.recompile
-    original, cover_of, pointers = rc.recompile, rc.code_cover, rc.data_pointer_entries
-    first = []
 
-    def code_cover(funcs):
-        first.append(funcs)
-        return cover_of(funcs)
-
-    def data_pointer_entries(img, an, segments, known, cover, fall_into, *rest, **kw):
-        extra = pointers(img, an, segments, known, cover, fall_into, *rest, **kw)
-        for held in (cover, fall_into):
-            for s in held.values():
-                s.clear()
-        known.clear()
-        for funcs in first:
-            funcs.clear()
-        first.clear()
-        gc.collect()
-        return extra
-
-    def recompile(*a, **k):
-        res = original(*a, **k)
-        res.pop("funcs", None)
-        gc.collect()
-        return res
-    rc.code_cover, rc.data_pointer_entries, rc.recompile = code_cover, data_pointer_entries, recompile
-
-    # every decoded instruction keeps its C statements as strings, and most are the same few thousand texts
-    # ("R(0) = R(1);"): one copy of each (sys.intern), the same strings and so the same C
-    from recomp import arm, thumb
-
-    def interned(decode):
-        def wrapper(self, *a, **k):
-            ins = decode(self, *a, **k)
-            if ins.body:
-                ins.body = [sys.intern(s) for s in ins.body]
-            if ins.pcexpr:
-                ins.pcexpr = sys.intern(ins.pcexpr)
-            return ins
-        return wrapper
-    arm.ArmTranslator.decode = interned(arm.ArmTranslator.decode)
-    thumb.ThumbTranslator.decode = interned(thumb.ThumbTranslator.decode)
-
-    # Python's collector of reference cycles walks every object the analysis keeps (a phone of 4 GB swaps much of the
-    # translator's 2.5 GB out, and a collection reads it all back); the translation makes no cycles worth collecting
-    # (the same peak with it off, measured) and the collections above stay: off until the C is written
+    # the collector walks every object the analysis keeps (a phone of 4 GB swaps much of the translator's memory out,
+    # and a collection reads it all back); the translation makes no cycles worth collecting (the same peak with it
+    # off, measured): off until the C is written, then one collection
     def collected(run):
         def wrapper(*a, **k):
             was = gc.isenabled()
@@ -443,6 +461,7 @@ def lean_recompile() -> None:
             finally:
                 if was:
                     gc.enable()
+                gc.collect()
         return wrapper
     rc.recompile = collected(rc.recompile)
 
@@ -568,10 +587,14 @@ def main(argv=None) -> int:
     ap.add_argument("--work", required=True, help="the work folder (kept between runs to go on where one stopped)")
     ap.add_argument("--dest", required=True, help="the folder the library and its .id go to (the game's folder)")
     ap.add_argument("--cc", required=True, help="the C compiler (the app's libzigcc.so)")
-    ap.add_argument("--jobs", type=int, default=os.cpu_count() or 2)
+    ap.add_argument("--jobs", type=int, default=os.cpu_count() or 2,
+                    help="the most compiles at once (default: the cores); as many run as the memory available holds")
     ap.add_argument("--expect-id", default="", help="the id the app wants: anything else stops before the long part")
     ap.add_argument("--clean", action="store_true", help="once the library is in place, delete the work folder (its C, "
                     "objects and Zig's cache: about 600 MB; a run after that starts from the beginning)")
+    ap.add_argument("--cache", help="the compiled objects' cache, kept across builds and mod versions (default: "
+                    f"{CACHE} beside the work folder; never inside it: --clean deletes that)")
+    ap.add_argument("--tuning", default=build_tuning.PATH, help="the build's numbers (config/build_tuning.json)")
     args = ap.parse_args(argv)
 
     t0 = time.time()
@@ -583,13 +606,22 @@ def main(argv=None) -> int:
         emit(f"@@error tools these tools make libraries with id {lib_id}, the app wants {args.expect_id}")
         return 1
     try:
+        try:
+            tuning = build_tuning.load(args.tuning)
+        except build_tuning.TuningError as e:
+            emit(f"@@error tools {' '.join(str(e).split())}")
+            return 1
         os.makedirs(args.work, exist_ok=True)
-        free = shutil.disk_usage(args.work).free
+        cache_dir = args.cache or os.path.join(os.path.dirname(os.path.abspath(args.work)), CACHE)
+        if os.path.abspath(cache_dir).startswith(os.path.abspath(args.work) + os.sep) and args.clean:
+            emit(f"@@error cache the objects' cache {cache_dir} is inside the work folder, which --clean deletes")
+            return 1
         out = os.path.join(args.work, "game")
         recomp = os.path.join(out, "recomp")
-        have = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(args.work) for f in fs)
-        if free + have < WORK_SPACE:
-            emit(f"@@error space {(WORK_SPACE - have - free) >> 20} MB more free space needed")
+        need, why = space_needed(args.work, cache_dir, tuning)
+        print(why)
+        if need > 0:
+            emit(f"@@error space {need} MB more free space needed ({why})")
             return 1
         dropped = drop_broken_objects(os.path.join(recomp, "obj"))
         if dropped:
@@ -617,7 +649,16 @@ def main(argv=None) -> int:
             if kept_inputs:
                 print("the last run's translation isn't for these inputs (or its C is gone): translating again")
 
-        cmd = ["--dump", args.update, "--native", "--android", "--cc", args.cc, "--out", out, "-j", str(args.jobs)]
+        if not reuse:
+            never, line = memory_check(tuning)
+            print(line)
+            if never:
+                emit(f"@@error memory {never}")
+                return 1
+
+        # (--jobs is the ceiling: the compiles running follow the memory available, recomp/jobs.py)
+        cmd = ["--dump", args.update, "--native", "--android", "--cc", args.cc, "--out", out, "-j", str(args.jobs),
+               "--tuning", args.tuning, "--jobs-by-memory", "--object-cache", cache_dir]
         if args.game:
             cmd += ["--romfs", args.game]
         # (build_game.py with --game-mods also reads every mod of a user folder that is on: mh4n feat-4ucode)
