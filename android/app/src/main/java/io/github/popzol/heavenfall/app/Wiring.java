@@ -1,9 +1,16 @@
 package io.github.popzol.heavenfall.app;
 
 import android.content.Context;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
+
+import java.io.FileDescriptor;
+import java.io.IOException;
 
 import io.github.popzol.heavenfall.BuilderApplier;
 import io.github.popzol.heavenfall.ModBuilder;
+import io.github.popzol.heavenfall.Records;
 
 /**
  * Where the parts that need the native library are put in place, once per process (the application class calls it, so
@@ -44,6 +51,19 @@ final class Wiring {
     static synchronized void install(Context context) {
         if (done) return;
         done = true;
+        // a record's folder synced after its rename (temp, fsync, rename): Android's own calls, a folder opened read-only
+        Records.setFolderSync(dir -> {
+            try {
+                FileDescriptor fd = Os.open(dir.getPath(), OsConstants.O_RDONLY, 0);
+                try {
+                    Os.fsync(fd);
+                } finally {
+                    Os.close(fd);
+                }
+            } catch (ErrnoException e) {
+                throw new IOException(e.getMessage(), e);
+            }
+        });
         ModBuilder.Backend backend = new Lazy();
         PhoneReader.setIdentifier(new NativeDumpIdentifier(backend));
         UpdateService.setApplier(new BuilderApplier(backend, SourceFile::of));

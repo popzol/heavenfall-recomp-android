@@ -12,6 +12,9 @@
 // the runtime as --saves; there .mh4u-in-use says the save is open here (kept fresh, removed at a clean exit). Only
 // with the app's own user folder: a test run's launch.txt with a user folder of its own never plays with that save.
 // The library is copied into the app's internal storage first: Android runs no code from shared storage.
+// BEGIN heavenfall: in Heavenfall nothing is copied: the launcher builds the library into the internal storage and only
+// that one is loaded; code= is not read.
+// END heavenfall
 #include <filesystem>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -418,6 +421,9 @@ struct SaveFolderMark {
 };
 
 // Copies `from` to `to` unless `to` already has the same size and is not older.
+// BEGIN heavenfall: no longer called (the library is never copied from shared storage)
+[[maybe_unused]]
+// END heavenfall
 bool CopyIfChanged(const std::string& from, const std::string& to) {
     struct stat a{}, b{};
     if (stat(from.c_str(), &a) != 0) return false;
@@ -752,7 +758,10 @@ int main(int argc, char* argv[]) {
             ui_set_bottom_default(false);
         }
     }
-    Logf("game %s, code %s, user %s", game.c_str(), code_src.c_str(), user.c_str());
+    // BEGIN heavenfall: the library that runs (see below), not launch.txt's code=
+    Logf("game %s, code %s, user %s", game.c_str(), code.c_str(), user.c_str());
+    (void)code_src;
+    // END heavenfall
     {
         auto ini = ReadKeyValues(user + "/mh4u.ini");
         float fps = 30;
@@ -855,15 +864,11 @@ int main(int argc, char* argv[]) {
 
     std::string problem;
     if (!FileExists(game + "/exheader.bin")) problem = "No game folder at " + game;
-    else if (!CopyIfChanged(code_src, code)) problem = "No code library at " + code_src;
-    if (problem.empty()) {  // (and its .id beside it: the runtime checks that the two come from the same build, S48)
-        // (always copied: a few bytes, and an .id of the same size and an older date is another build's)
-        const auto stem = [](const std::string& so) { return so.substr(0, so.size() - 3); };
-        std::ifstream in(stem(code_src) + ".id", std::ios::binary);
-        std::string id((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        if (in.is_open() && !id.empty()) std::ofstream(stem(code) + ".id", std::ios::binary | std::ios::trunc) << id;
-        else unlink((stem(code) + ".id").c_str());
-    }
+    // BEGIN heavenfall: only the library in the app's internal storage runs: the launcher builds it there, with its .id
+    // beside it, and checks it before every start. launch.txt's code= and a library in shared storage are never copied
+    // nor loaded.
+    else if (!FileExists(code)) problem = "No code library at " + code;
+    // END heavenfall
 
     // the game, on its own thread
     std::thread game_thread;

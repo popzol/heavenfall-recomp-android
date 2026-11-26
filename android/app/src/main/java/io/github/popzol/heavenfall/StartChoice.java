@@ -16,9 +16,10 @@ public final class StartChoice {
         this.forceBuild = forceBuild;
     }
 
-    /** Install, Update to X and Build, from the big button. */
+    /** Install, Update to X, Build and Reinstall (a mod changed outside the app), from the big button. */
     public static StartChoice forAction(HomeModel.Action action, HomeModel.Input in) {
         if (action == HomeModel.Action.BUILD) return new StartChoice(keepsXx(in), false, false);
+        if (action == HomeModel.Action.REINSTALL) return reinstall(in);
         boolean xx = in.xx == HomeModel.Source.GOOD;
         // an update that does not change the mod (only the app) keeps what is installed: its MH XX is not dropped
         // because the dump is not at hand

@@ -1,5 +1,7 @@
 package io.github.popzol.heavenfall;
 
+import java.io.File;
+
 import org.json.JSONObject;
 
 /**
@@ -7,9 +9,13 @@ import org.json.JSONObject;
  * whether MH XX goes in, and whether the mod or the library is made again even when they are current. The job asks
  * GitHub for the latest releases itself and makes the plan from them, so a job started again after the app replaced
  * itself (the request is kept in {@link JobPaths#jobFile}) chooses its steps from what is found then.
+ *
+ * <p>The saved request holds no path of the launcher's: a job read back gets the places from the app's code, and
+ * only the dumps' paths from the file, each taken only when it is a file right in the game folder ({@link JobPaths}).
  */
 public final class UpdateRequest {
-    public static final int FORMAT = 1;
+    /** 2: only the dumps' paths are kept (1 kept every path: read as no saved job). */
+    public static final int FORMAT = 2;
 
     public final String editionId;
     public final JobPaths paths;
@@ -62,12 +68,15 @@ public final class UpdateRequest {
         Json.put(o, "force_mod", forceMod);
         Json.put(o, "force_build", forceBuild);
         Json.put(o, "base_permille", basePermille);
-        Json.put(o, "paths", paths.toJson());
+        Json.put(o, "dumps", paths.dumpsJson());
         return o.toString();
     }
 
-    /** The request in {@code json}, or null when it is missing or not one this app understands. */
-    public static UpdateRequest tryParse(String json) {
+    /**
+     * The request in {@code json} with the launcher's {@code places} and the dumps it names in {@code gameFolder}, or
+     * null when it is missing, not one this app understands, or a dump is not a file right in the game folder.
+     */
+    public static UpdateRequest tryParse(String json, JobPaths.Places places, File gameFolder) {
         JSONObject o = Json.object(json);
         if (o == null) return null;
         Long format = Json.integer(o, "format");
@@ -75,16 +84,21 @@ public final class UpdateRequest {
         Boolean xx = Json.bool(o, "xx");
         Boolean forceMod = Json.bool(o, "force_mod");
         Boolean forceBuild = Json.bool(o, "force_build");
-        JobPaths paths = JobPaths.fromJson(Json.child(o, "paths"));
-        if (format == null || format != FORMAT || base == null || xx == null || forceMod == null || forceBuild == null
-                || paths == null) {
+        if (format == null || format != FORMAT || base == null || xx == null || forceMod == null || forceBuild == null) {
             return null;
         }
+        JobPaths paths = JobPaths.fromJson(Json.child(o, "dumps"), places, gameFolder);
+        if (paths == null) return null;
         try {
             return new UpdateRequest(Json.string(o, "edition"), paths, Json.string(o, "app_version"), xx, forceMod,
                     forceBuild, base.intValue());
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    /** {@link #tryParse} of the saved request in {@code places.jobFile}. */
+    public static UpdateRequest read(JobPaths.Places places, File gameFolder) {
+        return tryParse(Records.read(places.jobFile), places, gameFolder);
     }
 }

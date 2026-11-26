@@ -11,13 +11,21 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 public class UpdatePlanTest {
+    @Rule
+    public TemporaryFolder tmp = new TemporaryFolder();
+
     private static final String APP_REPO = "popzol/heavenfall-recomp-android";
     private final Tuning tuning = Support.tuning();
 
@@ -29,7 +37,7 @@ public class UpdatePlanTest {
     }
 
     private static Installed installed(String version, boolean xx) {
-        return new Installed("beta", version, "s.hfpatch", sha('a'), xx, sha('b'), "tools-7", sha('b'));
+        return Support.installed("beta", version, "s.hfpatch", sha('a'), xx, sha('b'), "tools-7", sha('b'));
     }
 
     /** An installed 0.2.3 with a good library, an app 1.0.0, a release of 0.3 with a set and a shared file. */
@@ -148,16 +156,18 @@ public class UpdatePlanTest {
         }
     }
 
-    /** Which interrupted jobs the home screen sees as half-done. */
+    /**
+     * Which interrupted jobs the home screen sees as half-done (F3): the app replaced itself, or the mod was being made.
+     * A ".part" download (a failed download, a declined APK install) is not: nothing installed was touched.
+     */
     @Test
     public void jobLeft() {
         Resume note = new Resume("beta", "1.1", "0.3", false, 100);
-        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(note, "1.1", false, false));
+        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(note, "1.1", false));
         assertEquals("a note the install never fulfilled is not a job", HomeModel.Job.NONE,
-                UpdatePlan.jobLeft(note, "1.0", false, false));
-        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(null, "1.0", true, false));
-        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(null, "1.0", false, true));
-        assertEquals(HomeModel.Job.NONE, UpdatePlan.jobLeft(null, "1.0", false, false));
+                UpdatePlan.jobLeft(note, "1.0", false));
+        assertEquals(HomeModel.Job.HALF_DONE, UpdatePlan.jobLeft(null, "1.0", true));
+        assertEquals(HomeModel.Job.NONE, UpdatePlan.jobLeft(null, "1.0", false));
     }
 
     /** What each interrupted step leaves, so the next start knows what to redo. */
@@ -239,17 +249,25 @@ public class UpdatePlanTest {
 
     /** A new mod with a library that was good: the build is kept only as conditional, and drops when the code is the same. */
     @Test
-    public void buildDecidedAfterApply() {
+    public void buildDecidedAfterApply() throws IOException {
         UpdatePlan p = make(base());
         assertTrue(p.steps().get(p.steps().size() - 1).conditional);
-        Installed sameCode = installed("0.2.3", false).applied("0.3", "s.hfpatch", sha('c'), false, sha('b'));
-        assertFalse(UpdatePlan.buildStillNeeded(sameCode, true, "tools-7", "tools-7"));
+        File lib = tmp.newFile("libmh4u_code_native.so");
+        Files.write(lib.toPath(), new byte[] {1, 2, 3});
+        Installed good = Installed.fresh("beta", "0.2.3", "s.hfpatch", sha('a'), false, sha('b'), sha('b'))
+                .withLibrary("tools-7", sha('b'), LibraryFile.of(lib));
+        LibraryBuilder.State onDisk = new LibraryBuilder.State(true, "tools-7", lib);
+        Installed sameCode = good.applied("0.3", "s.hfpatch", sha('c'), false, sha('b'), sha('b'));
+        assertFalse(UpdatePlan.buildStillNeeded(sameCode, onDisk, "tools-7"));
         UpdatePlan without = p.withoutBuild();
         assertEquals(Arrays.asList(StepKind.SET, StepKind.SHARED, StepKind.APPLY), kinds(without));
-        Installed newCode = installed("0.2.3", false).applied("0.3", "s.hfpatch", sha('c'), false, sha('d'));
-        assertTrue(UpdatePlan.buildStillNeeded(newCode, true, "tools-7", "tools-7"));
-        assertTrue("other tools mean a build too", UpdatePlan.buildStillNeeded(sameCode, true, "tools-7", "tools-8"));
-        assertTrue(UpdatePlan.buildStillNeeded(sameCode, false, null, "tools-7"));
+        Installed newCode = good.applied("0.3", "s.hfpatch", sha('c'), false, sha('d'), sha('d'));
+        assertTrue(UpdatePlan.buildStillNeeded(newCode, onDisk, "tools-7"));
+        assertTrue("other tools mean a build too", UpdatePlan.buildStillNeeded(sameCode, onDisk, "tools-8"));
+        assertTrue(UpdatePlan.buildStillNeeded(sameCode, new LibraryBuilder.State(false, null, null), "tools-7"));
+        // F1: a library put in place of the built one (same id beside it) is not the recorded file: built again
+        Files.write(lib.toPath(), new byte[] {9, 9, 9, 9});
+        assertTrue(UpdatePlan.buildStillNeeded(sameCode, onDisk, "tools-7"));
     }
 
     /** A first install always builds. */

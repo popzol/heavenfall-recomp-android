@@ -73,7 +73,7 @@ public class UpdateCheckTest {
         assertFalse(in.releaseHasXxSet);
         in.game = HomeModel.Source.GOOD;
         in.update = HomeModel.Source.GOOD;
-        in.installed = new Installed("beta", "v0.4", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
+        in.installed = Support.installed("beta", "v0.4", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
         in.library = HomeModel.Library.GOOD;
         assertEquals(HomeModel.Action.PLAY, new HomeModel(Support.tuning()).compute(in).action);
     }

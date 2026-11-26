@@ -86,6 +86,9 @@ public class GameFolderActivity extends Activity {
         if (files == null) return out;
         for (File f : files) {
             String n = f.getName().toLowerCase(Locale.ROOT);
+            // BEGIN heavenfall: a library in the game folder is never used (below)
+            if (n.endsWith(".so")) continue;
+            // END heavenfall
             if (n.equals(LIBRARY) || (n.endsWith("_native.so") && out[2] == null)) out[2] = f;
             else if (n.endsWith(".3ds") || n.endsWith(".cci") || n.endsWith(".cxi") || n.endsWith(".cia")) {
                 String kind = dump.describe(f);
@@ -93,6 +96,11 @@ public class GameFolderActivity extends Activity {
                 else if ("update".equals(kind) && out[1] == null) out[1] = f;
             }
         }
+        // BEGIN heavenfall: the code library is the one the launcher built in the app's private storage, where the game
+        // loads it from; startReady and verify check it against installed.json (StartGate) before the game starts
+        File own = new File(getFilesDir(), LIBRARY);
+        out[2] = own.isFile() ? own : null;
+        // END heavenfall
         return out;
     }
 
@@ -232,7 +240,9 @@ public class GameFolderActivity extends Activity {
         } catch (Exception e) {
             return false;
         }
-        return new File(dir, LIBRARY).canRead() || contents(dir)[2] != null;
+        // BEGIN heavenfall: the private library only (contents)
+        return contents(dir)[2] != null;
+        // END heavenfall
     }
 
     @Override
@@ -258,6 +268,12 @@ public class GameFolderActivity extends Activity {
             final boolean right = startReady();
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
+                // BEGIN heavenfall: a start the launcher's check refused goes back to Home, which offers what fixes it
+                if (refused != null) {
+                    io.github.popzol.heavenfall.app.StartGate.refuse(this, refused);
+                    return;
+                }
+                // END heavenfall
                 if (right) proceed();
                 else look();
             });
@@ -273,10 +289,18 @@ public class GameFolderActivity extends Activity {
         if (change || rejectedFile().exists() || !hasAccess() || !ready(chosen)) return false;
         File library = contents(chosen)[2];
         if (libraryVersionProblem(library) != null) return false;
+        // BEGIN heavenfall: the installed mod's code and the library are the ones installed.json recorded
+        refused = io.github.popzol.heavenfall.app.StartGate.problem(this);
+        if (refused != null) return false;
+        // END heavenfall
         syncMods(chosen);
         writeLaunch(chosen, library);
         return true;
     }
+
+    // BEGIN heavenfall: why the launcher's check refused this start (startReady), null when it did not
+    private volatile io.github.popzol.heavenfall.StartCheck.Problem refused;
+    // END heavenfall
 
     /** The files of the game, once the app's folder is known and startReady said they are not right: this screen. */
     private void look() {
@@ -617,6 +641,12 @@ public class GameFolderActivity extends Activity {
                            : LIBRARY + " is not an Android (arm64) library. Make it again on this phone or with the guide's tool.";
             else
                 wrong = libraryVersionProblem(c[2]);
+            // BEGIN heavenfall: the launcher's check (see startReady)
+            if (wrong == null) {
+                io.github.popzol.heavenfall.StartCheck.Problem p = io.github.popzol.heavenfall.app.StartGate.problem(this);
+                if (p != null) wrong = io.github.popzol.heavenfall.app.StartGate.text(this, p);
+            }
+            // END heavenfall
             // (the game and its update are there, the library isn't usable: it can be made here)
             final File buildable = wrong != null && c[0] != null && c[1] != null ? picked : null;
             if (wrong == null) {
@@ -686,8 +716,10 @@ public class GameFolderActivity extends Activity {
                 int tab = line.indexOf('\t');
                 before.put(tab >= 0 ? line.substring(0, tab) : line.trim(), tab >= 0 ? line.substring(tab + 1) : "");
             }
-            File[] old = any ? null : to.listFiles(File::isDirectory);
-            if (old != null) for (File f : old) if (!f.getName().startsWith(".")) before.put(f.getName(), "");
+            // BEGIN heavenfall: an empty mark never means that everything in load/mods came from the game folder (it
+            // would delete every imported mod): only the names a mark lists are taken as from there
+            if (!any) android.util.Log.w("MH4U", "mods: the game folder's mark is empty: nothing is taken as from there");
+            // END heavenfall
         }
         // BEGIN heavenfall: the launcher's mod (load/mods/Heavenfall, made by the app from its patch set) is never in this
         // list, so what is gone from the game folder never removes it and what is there never replaces it
@@ -770,11 +802,13 @@ public class GameFolderActivity extends Activity {
             return;
         }
         to.mkdirs();
-        try (FileOutputStream out = new FileOutputStream(mark)) {
-            out.write(list.toString().getBytes(StandardCharsets.UTF_8));
+        // BEGIN heavenfall: the mark written whole (temporary file, then a rename), never left empty by a kill
+        try {
+            io.github.popzol.heavenfall.Records.write(mark, list.toString());
         } catch (Exception e) {
             android.util.Log.e("MH4U", "mods: " + e);
         }
+        // END heavenfall
     }
 
     private static final String MOD_TITLE = "0004000000126300";
@@ -910,8 +944,9 @@ public class GameFolderActivity extends Activity {
     /** What the native side starts with (app_native/android_main.cpp). */
     private void writeLaunch(File dir, File library) {
         userDir().mkdirs();
-        String text = "game=" + gameDir().getAbsolutePath() + "\ncode=" + library.getAbsolutePath() + "\nuser="
-                + userDir().getAbsolutePath() + "\n";
+        // BEGIN heavenfall: no code= (the game loads the private library only: app_native/android_main.cpp)
+        String text = "game=" + gameDir().getAbsolutePath() + "\nuser=" + userDir().getAbsolutePath() + "\n";
+        // END heavenfall
         try (FileOutputStream out = new FileOutputStream(new File(home(), "launch.txt"))) {
             out.write(text.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {

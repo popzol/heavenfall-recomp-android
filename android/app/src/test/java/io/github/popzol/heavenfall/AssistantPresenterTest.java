@@ -24,7 +24,7 @@ public class AssistantPresenterTest {
         in.game = game;
         in.update = update;
         in.xx = xx;
-        if (installed) in.installed = new Installed("beta", "0.2.3", "s", sha('a'), false, sha('b'), "t", sha('b'));
+        if (installed) in.installed = Support.installed("beta", "0.2.3", "s", sha('a'), false, sha('b'), "t", sha('b'));
         return AssistantPresenter.present(model.compute(in));
     }
 

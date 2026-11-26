@@ -21,7 +21,7 @@ public class HomeModelTest {
     private final HomeModel model = new HomeModel(tuning);
 
     private static Installed installed(String version, boolean xx) {
-        return new Installed("beta", version, "s.hfpatch", sha('a'), xx, sha('b'), "tools-7", sha('b'));
+        return Support.installed("beta", version, "s.hfpatch", sha('a'), xx, sha('b'), "tools-7", sha('b'));
     }
 
     /** Everything good: 0.2.3 installed, library good, the latest known and the same, plenty of room. */
@@ -398,7 +398,10 @@ public class HomeModelTest {
         assertState("hf_state_offline", run(in));
     }
 
-    /** A job left half-done offers Resume, with the room and battery rules, and no Play beside it. */
+    /**
+     * F3: a job left half-done offers Resume and Discard, keeps Play while the installed game can start, and is never
+     * blocked by the room, the battery or the memory (the steps left check what they need when they start).
+     */
     @Test
     public void halfDone() {
         HomeModel.Input in = good();
@@ -408,12 +411,56 @@ public class HomeModelTest {
         assertEquals("hf_btn_resume", out.button.key);
         assertState("hf_state_half_done", out);
         assertTrue(out.enabled);
-        assertFalse(out.canPlay);
+        assertTrue("an installed game with a good library keeps Play", out.canPlay);
+        assertTrue(out.canDiscard);
 
         in.batteryPercent = 5;
+        in.freeBytes = 1;
+        in.availableMemoryMb = 1;
         out = run(in);
-        assertFalse(out.enabled);
-        assertTrue(blocked(out, "hf_block_battery"));
+        assertTrue(out.enabled);
+        assertTrue(out.blocks.isEmpty());
+
+        in.library = Library.OTHER_MOD;
+        assertFalse(run(in).canPlay);
+        in.installed = null;
+        in.library = Library.GOOD;
+        assertFalse("nothing installed: nothing to play", run(in).canPlay);
+    }
+
+    /**
+     * F2: the installed mod's code changed outside the app, or gone: Reinstall (the mod made again), never Build or
+     * Play, and the rebuild entry of More is gone with it.
+     */
+    @Test
+    public void aChangedModOffersReinstallOnly() {
+        HomeModel.Input in = good();
+        in.modCode = HomeModel.ModCode.CHANGED;
+        HomeModel.Output out = run(in);
+        assertEquals(Action.REINSTALL, out.action);
+        assertEquals("hf_btn_reinstall", out.button.key);
+        assertState("hf_state_mod_changed", out);
+        assertFalse(out.canPlay);
+        assertFalse(out.more.contains(HomeModel.More.REBUILD));
+        in.modCode = HomeModel.ModCode.MISSING;
+        assertState("hf_state_mod_missing", run(in));
+        in.job = Job.HALF_DONE;
+        assertEquals("before a half-done job: its build would be refused", Action.REINSTALL, run(in).action);
+        in.latestMod = null;
+        in.checking = false;
+        assertTrue("reinstalling downloads: the network is needed", blocked(run(in), "hf_block_no_network"));
+        assertTrue(StartChoice.forAction(Action.REINSTALL, in).forceMod);
+    }
+
+    /** F1: a library the app cannot tell it built (no record of its file) is built again. */
+    @Test
+    public void anUnknownLibraryIsBuiltAgain() {
+        HomeModel.Input in = good();
+        in.library = Library.UNKNOWN;
+        HomeModel.Output out = run(in);
+        assertEquals(Action.BUILD, out.action);
+        assertState("hf_state_rebuild_unknown", out);
+        assertFalse(out.canPlay);
     }
 
     /** A broken setup beats a half-done job: the folder has to be there before anything resumes. */

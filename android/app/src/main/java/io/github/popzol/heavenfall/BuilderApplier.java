@@ -30,7 +30,7 @@ public final class BuilderApplier implements ModApplier {
             ModBuilder.Made made = ModBuilder.apply(backend, request,
                     (done, total) -> progress.fraction(total <= 0 ? 0 : Math.min(1.0, done / (double) total)),
                     control::isCancelled);
-            return new Applied(made.codeSha256);
+            return new Applied(made.codeSha256, made.modCodeSha256);
         } catch (ModBuilder.Failed failed) {
             throw exception(failed.error, failed);
         }

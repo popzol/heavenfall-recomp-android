@@ -42,6 +42,10 @@ public final class Tuning {
     public final long applyKibPerSecond;      // the bar's weight of applying a set (bytes of the set and the shared file)
     public final long appInstallSeconds;      // the bar's weight of installing the APK, after its download
     public final long buildSeconds;           // the bar's weight of building the library
+    public final long buildBeforeCompileSeconds;   // a build's time before its compile (the tools, the translation)
+    public final long buildObjectSeconds;     // a build's time per object compiled, with its compilers together
+    public final long buildAfterCompileSeconds;    // a build's time after the last object (the link, the install)
+    public final long buildObjects;           // the objects a whole build compiles
     private final List<Tier> tiers;
 
     private Tuning(JSONObject o) {
@@ -56,6 +60,10 @@ public final class Tuning {
         applyKibPerSecond = positive(expected, "apply_kib_s");
         appInstallSeconds = positive(expected, "app_install_s");
         buildSeconds = positive(expected, "build_s");
+        buildBeforeCompileSeconds = range(expected, "build_before_compile_s", 0, 1L << 20);
+        buildObjectSeconds = range(expected, "build_object_s", 0, 1L << 20);
+        buildAfterCompileSeconds = range(expected, "build_after_compile_s", 0, 1L << 20);
+        buildObjects = range(expected, "build_objects", 1, 1L << 20);
         JSONArray array = Json.array(o, "compile_jobs_by_memory");
         if (array == null || array.length() == 0) throw new InvalidException("tuning.json: no compile_jobs_by_memory");
         List<Tier> list = new ArrayList<>();

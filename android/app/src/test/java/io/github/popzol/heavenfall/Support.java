@@ -39,6 +39,20 @@ final class Support {
     }
 
     /** 64 hex digits made of one digit. */
+    /** The library file the records of {@link #installed} name. */
+    static final LibraryFile LIBRARY_FILE = new LibraryFile(sha('f'), 1, 1);
+
+    /**
+     * A record with the mod's code digest equal to its executable's ({@code codeSha256}) and, when it has a library,
+     * the file {@link #LIBRARY_FILE}: the record of the tests that do not look at those.
+     */
+    static Installed installed(String edition, String modVersion, String setName, String setSha256, boolean withXx,
+                               String codeSha256, String libraryId, String libraryCodeSha256) {
+        boolean library = libraryId != null && !libraryId.isEmpty();
+        return new Installed(edition, modVersion, setName, setSha256, withXx, codeSha256, codeSha256,
+                library ? libraryId : "", library ? libraryCodeSha256 : "", library ? LIBRARY_FILE : null);
+    }
+
     static String sha(char c) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < 64; i++) sb.append(c);

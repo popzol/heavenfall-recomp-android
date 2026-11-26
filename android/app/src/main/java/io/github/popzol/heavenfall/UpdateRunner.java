@@ -2,9 +2,6 @@ package io.github.popzol.heavenfall;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 /**
@@ -26,6 +23,41 @@ public final class UpdateRunner {
         void line(String line);
     }
 
+    /** The phone's state a build needs, read when the build step starts: -1 (and not charging) when not known. */
+    public interface Conditions {
+        /** Free bytes where the build works. */
+        long freeBytes();
+
+        long availableMemoryMb();
+
+        int batteryPercent();
+
+        boolean charging();
+    }
+
+    /** Nothing known: no build is stopped by the phone's state. */
+    public static final Conditions UNKNOWN_CONDITIONS = new Conditions() {
+        @Override
+        public long freeBytes() {
+            return -1;
+        }
+
+        @Override
+        public long availableMemoryMb() {
+            return -1;
+        }
+
+        @Override
+        public int batteryPercent() {
+            return -1;
+        }
+
+        @Override
+        public boolean charging() {
+            return false;
+        }
+    };
+
     /** What the runner works with. */
     public static final class Parts {
         public final ReleaseClient client;
@@ -36,9 +68,15 @@ public final class UpdateRunner {
         public final Editions editions;
         public final Tuning tuning;
         public final Log log;
+        public final Conditions conditions;
 
         public Parts(ReleaseClient client, Downloader downloader, AppInstaller appInstaller, ModApplier applier,
                      LibraryBuilder builder, Editions editions, Tuning tuning, Log log) {
+            this(client, downloader, appInstaller, applier, builder, editions, tuning, log, null);
+        }
+
+        public Parts(ReleaseClient client, Downloader downloader, AppInstaller appInstaller, ModApplier applier,
+                     LibraryBuilder builder, Editions editions, Tuning tuning, Log log, Conditions conditions) {
             this.client = client;
             this.downloader = downloader;
             this.appInstaller = appInstaller;
@@ -46,6 +84,7 @@ public final class UpdateRunner {
             this.builder = builder;
             this.editions = editions;
             this.tuning = tuning;
+            this.conditions = conditions == null ? UNKNOWN_CONDITIONS : conditions;
             this.log = log == null ? new Log() {
                 @Override
                 public void line(String line) {
@@ -89,6 +128,8 @@ public final class UpdateRunner {
         int lastPermille = -1;
         long lastTime;
         Installed installed;
+        /** The running step's own measure of its time left ({@link Fraction#msLeft}); -1 when it has none. */
+        volatile long stepMsLeft = -1;
 
         Run(UpdateRequest request, Control control) {
             this.request = request;
@@ -108,7 +149,8 @@ public final class UpdateRunner {
             if (installed != null && !installed.edition.equals(edition.id)) installed = null;
             LibraryBuilder.State library = parts.builder.state();
             HomeModel.Library state = installed == null ? Installed.libraryStateWithoutRecord(library.present)
-                    : installed.libraryState(library.present, library.id, parts.builder.wantedId());
+                    : installed.libraryState(library.present, library.id, parts.builder.wantedId(),
+                            library.matches(installed));
             UpdatePlan.Input input = UpdateCheck.planInput(latest, parts.editions, request, installed, state);
             plan = UpdatePlan.make(edition.id, input, parts.tuning);
             if (plan.status == UpdatePlan.Status.REFUSED) {
@@ -215,8 +257,10 @@ public final class UpdateRunner {
             String setName = edition.setName(UpdateCheck.REGION, plan.withXx);
             ReleaseRules.Asset setAsset = release.asset(setName);
             installed = installed != null
-                    ? installed.applied(release.tag, setName, setAsset.sha256, plan.withXx, applied.codeSha256)
-                    : Installed.fresh(edition.id, release.tag, setName, setAsset.sha256, plan.withXx, applied.codeSha256);
+                    ? installed.applied(release.tag, setName, setAsset.sha256, plan.withXx, applied.codeSha256,
+                            applied.modCodeSha256)
+                    : Installed.fresh(edition.id, release.tag, setName, setAsset.sha256, plan.withXx, applied.codeSha256,
+                            applied.modCodeSha256);
             writeText(paths.installedFile, installed.toJson());
             parts.log.line("update job: applied " + release.tag + (plan.withXx ? " with MH XX" : ""));
             deleteTree(paths.staging);
@@ -225,24 +269,30 @@ public final class UpdateRunner {
         }
 
         boolean buildNeeded() {
-            LibraryBuilder.State library = parts.builder.state();
             return installed == null
-                    || UpdatePlan.buildStillNeeded(installed, library.present, library.id, parts.builder.wantedId());
+                    || UpdatePlan.buildStillNeeded(installed, parts.builder.state(), parts.builder.wantedId());
         }
 
         void buildStep(Text label) throws UpdateException {
-            String id = parts.builder.build(paths, control, new Fraction() {
+            if (installed == null) throw new UpdateException(UpdateFailure.BUILD_FAILED, "nothing installed");
+            String code = modCodeChecked(paths.modDir, installed);
+            conditionsChecked(parts.conditions, parts.tuning);
+            LibraryBuilder.Built built = parts.builder.build(paths, control, new Fraction() {
                 @Override
                 public void fraction(double done) {
                     publishStep(done, label);
                 }
+
+                @Override
+                public void msLeft(long ms) {
+                    stepMsLeft = ms;
+                }
             });
-            if (id == null || id.trim().isEmpty() || installed == null) {
-                throw new UpdateException(UpdateFailure.BUILD_FAILED, "no library id");
-            }
-            installed = installed.withLibrary(id.trim());
+            stepMsLeft = -1;
+            if (built == null) throw new UpdateException(UpdateFailure.BUILD_FAILED, "no library");
+            installed = installed.withLibrary(built.toolsId, code, built.file);
             writeText(paths.installedFile, installed.toJson());
-            parts.log.line("update job: library built by " + id.trim());
+            parts.log.line("update job: library built by " + built.toolsId);
         }
 
         void done() {
@@ -273,7 +323,7 @@ public final class UpdateRunner {
             int permille = plan.permille(index, stepFraction);
             boolean same = state.equals(lastState);
             if (same && permille == lastPermille) return;
-            publish(JobProgress.Phase.RUNNING, permille, state, plan.remainingMs(index, stepFraction),
+            publish(JobProgress.Phase.RUNNING, permille, state, plan.remainingMs(index, stepFraction, stepMsLeft),
                     plan.steps().get(index).kind, index + 1, plan.steps().size(), !same || stepFraction >= 1.0);
         }
 
@@ -290,22 +340,48 @@ public final class UpdateRunner {
         }
     }
 
+    // ---- what a build needs
+
+    /**
+     * The installed mod's code digest, checked against the one {@code installed.json} recorded when the mod was made:
+     * a library is only ever built from that code. A mod changed since, or gone, is {@link UpdateFailure#MOD_CHANGED}
+     * (the home screen then offers Reinstall).
+     */
+    static String modCodeChecked(File modDir, Installed installed) throws UpdateException {
+        String code;
+        try {
+            code = ModCode.digest(modDir);
+        } catch (IOException e) {
+            throw new UpdateException(UpdateFailure.MOD_CHANGED, e.getClass().getSimpleName(), e);
+        }
+        if (code == null || !code.equals(installed.modCodeSha256)) {
+            throw new UpdateException(UpdateFailure.MOD_CHANGED, code == null ? "no mod code" : "mod code changed");
+        }
+        return code;
+    }
+
+    /** Space, battery (unless charging) and memory against the tuning, when the build step starts. */
+    static void conditionsChecked(Conditions c, Tuning tuning) throws UpdateException {
+        long free = c.freeBytes();
+        if (free >= 0 && free < tuning.minFreeBuildBytes()) {
+            throw new UpdateException(UpdateFailure.BUILD_SPACE, "free " + free);
+        }
+        int battery = c.batteryPercent();
+        if (battery >= 0 && !c.charging() && battery < tuning.minBatteryPercent) {
+            throw new UpdateException(UpdateFailure.BUILD_BATTERY, "battery " + battery);
+        }
+        long memory = c.availableMemoryMb();
+        if (memory >= 0 && memory < tuning.minAvailableMemoryMb) {
+            throw new UpdateException(UpdateFailure.BUILD_MEMORY, "memory " + memory);
+        }
+    }
+
     // ---- files
 
-    /** Writes {@code text} to {@code file} whole or not at all (a temporary file, then a rename). */
+    /** Writes {@code text} to {@code file} whole or not at all ({@link Records#write}). */
     static void writeText(File file, String text) throws UpdateException {
         try {
-            File dir = file.getAbsoluteFile().getParentFile();
-            if (dir != null && !dir.isDirectory() && !dir.mkdirs() && !dir.isDirectory()) {
-                throw new IOException("no folder " + dir);
-            }
-            File temp = new File(dir, file.getName() + ".tmp");
-            Files.write(temp.toPath(), text.getBytes(StandardCharsets.UTF_8));
-            try {
-                Files.move(temp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException e) {
-                Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            }
+            Records.write(file, text);
         } catch (IOException e) {
             throw new UpdateException(UpdateFailure.CANNOT_WRITE, file.getName(), e);
         }

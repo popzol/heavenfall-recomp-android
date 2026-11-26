@@ -14,6 +14,7 @@
     <item name="hf_job_hint" type="id" />
     <item name="hf_main" type="id" />
     <item name="hf_play" type="id" />
+    <item name="hf_discard" type="id" />
     <item name="hf_cancel" type="id" />
     <item name="hf_more" type="id" />
     <item name="hf_steps" type="id" />

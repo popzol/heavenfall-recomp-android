@@ -47,6 +47,10 @@ public class UpdateRunnerTest {
     private boolean libraryPresent;
     private String libraryId = "";
     private File installedApk;
+    private File gameFolder;
+    private File libFile;
+    private UpdateRunner.Conditions conditions;
+    private long buildMsLeft = -1;
 
     @Before
     public void start() throws IOException {
@@ -54,9 +58,37 @@ public class UpdateRunnerTest {
         editions = Support.editions();
         beta = editions.first();
         File root = tmp.newFolder("job");
-        paths = new JobPaths(new File(root, "downloads"), new File(root, "staging"), new File(root, "mod"),
-                new File(root, "installed.json"), new File(root, "resume.json"), new File(root, "job.json"),
-                new File(root, "game.cci"), new File(root, "update.cia"), null, new File(root, "lib"));
+        gameFolder = tmp.newFolder("game folder");
+        File game = new File(gameFolder, "game.cci"), update = new File(gameFolder, "update.cia");
+        Files.write(game.toPath(), new byte[] {1});
+        Files.write(update.toPath(), new byte[] {2});
+        paths = new JobPaths(new JobPaths.Places(new File(root, "downloads"), new File(root, "staging"),
+                new File(root, "mod"), new File(root, "installed.json"), new File(root, "resume.json"),
+                new File(root, "job.json"), new File(root, "lib")), game, update, null);
+        libFile = new File(paths.libraryDir, "libmh4u_code_native.so");
+    }
+
+    /** The mod's folder as an applier leaves it, its executable made of {@code code}; its code digest. */
+    private String writeMod(String code) {
+        try {
+            File exefs = new File(paths.modDir, "exefs");
+            Files.createDirectories(exefs.toPath());
+            Files.write(new File(exefs, "code.bin").toPath(), code.getBytes(StandardCharsets.UTF_8));
+            return ModCode.digest(paths.modDir);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** The library a build leaves, and its record. */
+    private LibraryFile writeLibrary(int seed) {
+        try {
+            Files.createDirectories(paths.libraryDir.toPath());
+            Files.write(libFile.toPath(), bytes(4096, seed));
+            return LibraryFile.of(libFile);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @After
@@ -115,12 +147,12 @@ public class UpdateRunnerTest {
             }
             if (applyFails != null) throw applyFails;
             progress.fraction(1.0);
-            return new ModApplier.Applied(appliedCode);
+            return new ModApplier.Applied(appliedCode, writeMod(appliedCode));
         };
         LibraryBuilder builder = new LibraryBuilder() {
             @Override
             public State state() {
-                return new State(libraryPresent, libraryId);
+                return new State(libraryPresent, libraryId, libraryPresent ? libFile : null);
             }
 
             @Override
@@ -129,13 +161,14 @@ public class UpdateRunnerTest {
             }
 
             @Override
-            public String build(JobPaths p, Control control, Fraction progress) throws UpdateException {
+            public Built build(JobPaths p, Control control, Fraction progress) throws UpdateException {
                 calls.add("build");
+                if (buildMsLeft >= 0) progress.msLeft(buildMsLeft);
                 progress.fraction(0.5);
                 if (buildFails != null) throw buildFails;
                 libraryPresent = true;
                 libraryId = LIB_ID;
-                return LIB_ID;
+                return new Built(LIB_ID, writeLibrary(7));
             }
         };
         AppInstaller installer = (apk, control, waiting) -> {
@@ -146,7 +179,7 @@ public class UpdateRunnerTest {
         };
         UpdateRunner.Parts parts = new UpdateRunner.Parts(new ReleaseClient(server.map()), new Downloader(server.map(),
                 d -> Long.MAX_VALUE), installer, applierOverride != null ? applierOverride : applier, builder, editions,
-                Support.tuning(), null);
+                Support.tuning(), null, conditions);
         return new UpdateRunner(parts, seen::add);
     }
 
@@ -175,8 +208,10 @@ public class UpdateRunnerTest {
     }
 
     private void writeInstalled(String modTag, boolean xx, boolean libraryGood) throws IOException {
-        Installed i = new Installed("heavenfall_beta", modTag, beta.setName("usa", xx), Support.sha('a'), xx, CODE,
-                libraryGood ? LIB_ID : "", libraryGood ? CODE : "");
+        String modCode = writeMod(CODE);
+        Installed i = Installed.fresh("heavenfall_beta", modTag, beta.setName("usa", xx), Support.sha('a'), xx, CODE,
+                modCode);
+        if (libraryGood) i = i.withLibrary(LIB_ID, modCode, writeLibrary(5));
         Files.write(paths.installedFile.toPath(), i.toJson().getBytes(StandardCharsets.UTF_8));
         libraryPresent = libraryGood;
         libraryId = libraryGood ? LIB_ID : "";
@@ -209,7 +244,8 @@ public class UpdateRunnerTest {
         assertFalse(i.withXx);
         assertEquals(CODE, i.codeSha256);
         assertEquals(LIB_ID, i.libraryId);
-        assertEquals(HomeModel.Library.GOOD, i.libraryState(true, LIB_ID, LIB_ID));
+        assertEquals(HomeModel.Library.GOOD, i.libraryState(true, LIB_ID, LIB_ID, i.libraryFile.matches(libFile)));
+        assertEquals("the record holds the code the mod has", ModCode.digest(paths.modDir), i.modCodeSha256);
         assertEquals("downloads are removed once applied", 0, paths.downloads.list().length);
         assertFalse(paths.staging.exists());
         assertFalse("a finished job leaves no saved request", paths.jobFile.exists());
@@ -297,7 +333,8 @@ public class UpdateRunnerTest {
         assertEquals(why(end), JobProgress.Phase.DONE, end.phase);
         assertEquals(java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared", "build"), calls);
         Installed i = Installed.parse(new String(Files.readAllBytes(paths.installedFile.toPath()), StandardCharsets.UTF_8));
-        assertEquals(Support.sha('d'), i.libraryCodeSha256);
+        assertEquals(Support.sha('d'), i.codeSha256);
+        assertEquals("the library is recorded as built from the new code", i.modCodeSha256, i.libraryCodeSha256);
     }
 
     /** A build that fails after applying leaves the new mod recorded and the library not good: the home offers Build. */
@@ -311,7 +348,7 @@ public class UpdateRunnerTest {
         assertEquals(UpdatePlan.StepKind.BUILD, end.step);
         Installed i = Installed.parse(new String(Files.readAllBytes(paths.installedFile.toPath()), StandardCharsets.UTF_8));
         assertEquals("v0.3", i.modVersion);
-        assertTrue(i.libraryState(libraryPresent, libraryId, LIB_ID) != HomeModel.Library.GOOD);
+        assertTrue(i.libraryState(libraryPresent, libraryId, LIB_ID, false) != HomeModel.Library.GOOD);
     }
 
     /** The mod's release cannot be had and nothing is installed: the network's reason, not a vague one. */
@@ -339,8 +376,8 @@ public class UpdateRunnerTest {
         assertEquals("v0.3", note.modTarget);
         assertTrue("the bar goes on from here", note.basePermille > 0);
         // the new app starts: the saved request goes on from the note, without the APK step
-        assertEquals(HomeModel.Job.HALF_DONE, JobState.left(paths.jobFile, "1.1.0"));
-        UpdateRequest saved = JobState.savedRequest(paths.jobFile);
+        assertEquals(HomeModel.Job.HALF_DONE, JobState.left(paths.places, gameFolder, "1.1.0"));
+        UpdateRequest saved = JobState.savedRequest(paths.places, gameFolder);
         assertNotNull(saved);
         seen.clear();
         calls.clear();
@@ -366,7 +403,7 @@ public class UpdateRunnerTest {
         assertTrue("nothing after the APK ran", calls.size() == 1);
         // a note left by an install that did not happen (the process died) is dropped by the home's check
         Files.write(paths.resumeFile.toPath(), new Resume("heavenfall_beta", "v1.1.0", "v0.3", false, 100).toJson().getBytes(StandardCharsets.UTF_8));
-        assertEquals(HomeModel.Job.NONE, JobState.left(paths.jobFile, "1.0.0"));
+        assertEquals(HomeModel.Job.NONE, JobState.left(paths.places, gameFolder, "1.0.0"));
         assertFalse(paths.resumeFile.exists());
     }
 
@@ -395,7 +432,8 @@ public class UpdateRunnerTest {
         assertEquals(why(end), JobProgress.Phase.CANCELLED, end.phase);
         File part = Downloader.partOf(paths.downloads, setName);
         assertTrue(part.isFile());
-        assertEquals(HomeModel.Job.HALF_DONE, JobState.left(paths.jobFile, "1.0.0"));
+        assertEquals("F3: a download cut short is not a half-done job (Play stays; Update goes on from the part)",
+                HomeModel.Job.NONE, JobState.left(paths.places, gameFolder, "1.0.0"));
         long have = part.length();
         server.file("/github/" + beta.repository + "/releases/download/v0.3/" + setName, set);
         JobProgress again = run(request("1.0.0", false));
@@ -417,15 +455,82 @@ public class UpdateRunnerTest {
 
     /** The request is saved whole and read back (the app goes on with it after replacing itself). */
     @Test
-    public void theRequestRoundTrips() {
-        UpdateRequest r = new UpdateRequest("heavenfall_beta", new JobPaths(new File("d"), new File("s"), new File("m"),
-                new File("i"), new File("r"), new File("j"), new File("g"), new File("u"), new File("x"), new File("l")),
-                "1.2.3", true, false, true, 250);
-        UpdateRequest back = UpdateRequest.tryParse(r.toJson());
+    public void theRequestRoundTrips() throws IOException {
+        File xx = new File(gameFolder, "xx.cci");
+        Files.write(xx.toPath(), new byte[] {3});
+        UpdateRequest r = new UpdateRequest("heavenfall_beta", new JobPaths(paths.places, paths.gameDump, paths.updateDump,
+                xx), "1.2.3", true, false, true, 250);
+        UpdateRequest back = UpdateRequest.tryParse(r.toJson(), paths.places, gameFolder);
         assertNotNull(back);
         assertEquals(r.toJson(), back.toJson());
-        assertEquals(new File("x"), back.paths.xxDump);
-        assertNull(UpdateRequest.tryParse("{\"format\": 1}"));
-        assertNull(UpdateRequest.tryParse("nonsense"));
+        assertEquals(xx.getCanonicalFile(), back.paths.xxDump.getCanonicalFile());
+        assertNull(UpdateRequest.tryParse("{\"format\": 1}", paths.places, gameFolder));
+        assertNull(UpdateRequest.tryParse("nonsense", paths.places, gameFolder));
+    }
+
+    /**
+     * F2: the mod's code is checked against the record before every build: a mod changed since it was made is never
+     * built (MOD_CHANGED, and Home offers Reinstall).
+     */
+    @Test
+    public void aChangedModIsNeverBuilt() throws Exception {
+        publishMod("v0.3", false);
+        publishApp("v1.0.0");
+        writeInstalled("v0.3", false, false);
+        Files.write(new File(paths.modDir, "exefs/code.bin").toPath(), "other code".getBytes(StandardCharsets.UTF_8));
+        JobProgress end = run(request("1.0.0", false));
+        assertEquals(why(end), JobProgress.Phase.FAILED, end.phase);
+        assertEquals("hf_fail_mod_changed", end.failureReason.key);
+        assertFalse("nothing was built", calls.contains("build"));
+        Files.delete(new File(paths.modDir, "exefs/code.bin").toPath());
+        calls.clear();
+        JobProgress gone = run(request("1.0.0", false));
+        assertEquals("hf_fail_mod_changed", gone.failureReason.key);
+        assertFalse(calls.contains("build"));
+    }
+
+    /** F3: the battery block applies to the build step when it starts, not to the downloads before it. */
+    @Test
+    public void aLowBatteryStopsTheBuildStepOnly() throws Exception {
+        publishMod("v0.3", false);
+        conditions = new UpdateRunner.Conditions() {
+            @Override
+            public long freeBytes() {
+                return -1;
+            }
+
+            @Override
+            public long availableMemoryMb() {
+                return -1;
+            }
+
+            @Override
+            public int batteryPercent() {
+                return 3;
+            }
+
+            @Override
+            public boolean charging() {
+                return false;
+            }
+        };
+        JobProgress end = run(request("1.0.0", false));
+        assertEquals(why(end), JobProgress.Phase.FAILED, end.phase);
+        assertEquals("hf_fail_build_battery", end.failureReason.key);
+        assertEquals(UpdatePlan.StepKind.BUILD, end.step);
+        assertEquals("the mod was applied before the build step stopped",
+                java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared"), calls);
+    }
+
+    /** The build's own measure of its time left (BuildEta) is the time the bar shows during the build. */
+    @Test
+    public void theBuildsOwnTimeLeftIsShown() throws Exception {
+        publishMod("v0.3", false);
+        buildMsLeft = 123_456;
+        JobProgress end = run(request("1.0.0", false));
+        assertEquals(why(end), JobProgress.Phase.DONE, end.phase);
+        boolean shown = false;
+        for (JobProgress p : seen) if (p.step == UpdatePlan.StepKind.BUILD && p.msLeft == 123_456) shown = true;
+        assertTrue("the build's measure, not the plan's guess: " + seen, shown);
     }
 }

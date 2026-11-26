@@ -26,14 +26,19 @@ public final class HeavenfallBridge {
         public final String errorStage;
         public final String errorText;
         public final boolean active;
+        /** The stage's own count (in "compile": the objects done of the total; up to date ones are done), 0 when none. */
+        public final long done, total;
 
-        BuildStatus(String status, String stage, int percent, String errorStage, String errorText, boolean active) {
+        BuildStatus(String status, String stage, int percent, String errorStage, String errorText, boolean active,
+                    long done, long total) {
             this.status = status;
             this.stage = stage;
             this.percent = percent;
             this.errorStage = errorStage;
             this.errorText = errorText;
             this.active = active;
+            this.done = done;
+            this.total = total;
         }
     }
 
@@ -64,7 +69,16 @@ public final class HeavenfallBridge {
 
     public static BuildStatus buildStatus() {
         BuilderService.Job j = BuilderService.job;
-        return new BuildStatus(j.status, j.stage, BuilderText.percent(j), j.errorStage, j.errorText, j.active());
+        return new BuildStatus(j.status, j.stage, BuilderText.percent(j), j.errorStage, j.errorText, j.active(), j.done,
+                j.total);
+    }
+
+    /** The objects an earlier build left in the builder's work folder (phone_build.py's game/recomp/obj), 0 for none. */
+    public static long objectsKept(Context c) {
+        String[] names = new File(BuilderService.work(c), "game/recomp/obj").list();
+        long n = 0;
+        if (names != null) for (String name : names) if (name.endsWith(".o")) n++;
+        return n;
     }
 
     /** The build's state goes back to idle after its end was read (the next start begins clean anyway). */

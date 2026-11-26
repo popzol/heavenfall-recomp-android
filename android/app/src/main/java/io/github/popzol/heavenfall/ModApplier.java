@@ -11,12 +11,16 @@ import java.io.File;
 public interface ModApplier {
     /** What applying made. */
     final class Applied {
-        /** SHA-256 of the mod's code (lower-case hex): what the code library is built from. */
+        /** SHA-256 of the mod's executable (lower-case hex). */
         public final String codeSha256;
+        /** The digest of everything in the new mod that becomes code ({@link ModCode}): what a library is built from. */
+        public final String modCodeSha256;
 
-        public Applied(String codeSha256) {
+        public Applied(String codeSha256, String modCodeSha256) {
             if (!Json.isSha256(codeSha256)) throw new IllegalArgumentException("not a SHA-256: " + codeSha256);
+            if (!Json.isSha256(modCodeSha256)) throw new IllegalArgumentException("not a SHA-256: " + modCodeSha256);
             this.codeSha256 = Json.lower(codeSha256);
+            this.modCodeSha256 = Json.lower(modCodeSha256);
         }
     }
 

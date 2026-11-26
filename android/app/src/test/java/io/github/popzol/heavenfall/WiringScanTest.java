@@ -1,6 +1,7 @@
 package io.github.popzol.heavenfall;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -48,15 +49,72 @@ public class WiringScanTest {
     }
 
     @Test
-    public void theLibraryBuildGetsTheUserFolderTheModLivesIn() throws Exception {
-        // Catches a build that reads another folder's mods than the one the launcher's mod is made in (the library
-        // would then leave the mod's code out and the game would refuse it).
-        assertTrue(read("mh4n/tools/android/phone_build.py").contains("--user-mods"));
+    public void theLibraryBuildCompilesTheLaunchersModAloneIntoThePrivateStorage() throws Exception {
+        // Catches (F5) a build that compiles every code mod switched on in the mods folder instead of the launcher's
+        // mod alone, and (F1) a build into, or a library read from, anywhere but the app's private storage.
+        assertTrue(read("mh4n/tools/android/phone_build.py").contains("add_argument(\"--mod\""));
         String builder = read(JAVA + "io/github/popzol/heavenfall/app/PhoneLibraryBuilder.java");
-        assertTrue(builder.contains("MOD_FLAG = \"--user-mods\""));
-        assertTrue(builder.contains("LauncherMod.userFolder(Locations.home(context))"));
+        assertTrue(builder.contains("MOD_FLAG = \"--mod\""));
+        assertTrue(builder.contains("libraryDir, MOD_FLAG, paths.modDir)"));
         String locations = read(JAVA + "io/github/popzol/heavenfall/app/Locations.java");
         assertTrue(locations.contains("LauncherMod.modDir(home)") && locations.contains("LauncherMod.stagingDir(home)"));
+        assertTrue(locations.contains("return c.getFilesDir();"));
+        assertTrue("the records are in the private storage",
+                locations.contains("return new File(c.getFilesDir(), \"heavenfall\");"));
+        String entry = read(JAVA + "com/mh4u/port/GameFolderActivity.java");
+        assertTrue("the entry takes no library from the game folder", entry.contains("if (n.endsWith(\".so\")) continue;"));
+        assertTrue(entry.contains("File own = new File(getFilesDir(), LIBRARY);"));
+        assertTrue("the entry checks the record before a start", entry.contains("StartGate.problem(this)"));
+        assertFalse("launch.txt names no library", entry.contains("\"\\ncode=\""));
+        String main = read("app_native/android_main.cpp");
+        assertFalse("the native start copies no library from shared storage", main.contains("CopyIfChanged(code_src, code)"));
+        assertTrue(main.contains("else if (!FileExists(code)) problem = \"No code library at \" + code;"));
+    }
+
+    @Test
+    public void adbsStartIsForDebugBuildsOnly() throws Exception {
+        // Catches (F4) a release build that lets any caller naming the shell as its referrer start the game without
+        // the entry's checks.
+        String game = read(JAVA + "com/mh4u/port/GameActivity.java");
+        assertTrue(game.contains("EntryRule.mayStart(entered, by, debuggable)"));
+        assertTrue(game.contains("ApplicationInfo.FLAG_DEBUGGABLE"));
+        assertFalse(game.contains("if (!entered && !\"com.android.shell\".equals(by))"));
+    }
+
+    @Test
+    public void onlyTheLauncherAndTheGameAreExportedInARelease() throws Exception {
+        // Catches (F6) a screen of the app other apps can open in a release build (the entry flow, More, the
+        // assistant, MH XX's page), and a debug manifest that stops exporting them for the tests through adb.
+        String manifest = read("android/app/src/main/AndroidManifest.xml");
+        Matcher m = Pattern.compile("<(activity|service|receiver|provider)\\s+android:name=\"([^\"]+)\"[^>]*?android:exported=\"true\"",
+                Pattern.DOTALL).matcher(manifest);
+        java.util.List<String> exported = new java.util.ArrayList<>();
+        while (m.find()) exported.add(m.group(2));
+        assertEquals(java.util.Arrays.asList(".GameActivity", "io.github.popzol.heavenfall.app.HomeActivity"), exported);
+        String debug = read("android/app/src/debug/AndroidManifest.xml");
+        for (String name : new String[] {"com.mh4u.port.GameFolderActivity", "io.github.popzol.heavenfall.app.AssistantActivity",
+                "io.github.popzol.heavenfall.app.MoreActivity", "io.github.popzol.heavenfall.app.XxActivity"}) {
+            assertTrue(name, debug.contains("android:name=\"" + name + "\" android:exported=\"true\""));
+        }
+        String home = read(JAVA + "io/github/popzol/heavenfall/app/HomeActivity.java");
+        assertTrue("Home's auto-play needs the one-time token", home.contains("AutoPlay.consume(getFilesDir()"));
+        assertFalse(home.contains("getBooleanExtra(HeavenfallBridge.EXTRA_AUTO_PLAY"));
+        String phoenix = read(JAVA + "com/mh4u/port/PhoenixActivity.java");
+        assertTrue(phoenix.contains("AutoPlay.issue(getFilesDir()"));
+    }
+
+    @Test
+    public void codeModsAreOffBeforeTheyAreLiveAndTheMarkIsWrittenWhole() throws Exception {
+        // Catches (F5) an imported code mod renamed into load/mods before it is off, an order file truncated before it
+        // is written, a game-folder mark written in place, and an empty mark read as "everything came from there".
+        String imp = read(JAVA + "com/mh4u/port/ImportActivity.java");
+        int off = imp.indexOf("if (code) io.github.popzol.heavenfall.ModOrder.keepOff(modsDir(), name, true);");
+        int rename = imp.indexOf("if (!root.renameTo(to)) throw new Refused(\"unwritable\", to.getPath());");
+        assertTrue(off > 0 && rename > off);
+        assertFalse(imp.contains("            if (code) keepOff(modsDir(), name);"));
+        String entry = read(JAVA + "com/mh4u/port/GameFolderActivity.java");
+        assertTrue(entry.contains("io.github.popzol.heavenfall.Records.write(mark, list.toString());"));
+        assertFalse(entry.contains("File[] old = any ? null : to.listFiles(File::isDirectory);"));
     }
 
     @Test

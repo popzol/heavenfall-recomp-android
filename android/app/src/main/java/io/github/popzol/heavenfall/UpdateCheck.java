@@ -1,9 +1,6 @@
 package io.github.popzol.heavenfall;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 
 /**
  * Asks for the app's latest release and the edition's, and turns the answers into what the home screen
@@ -95,10 +92,6 @@ public final class UpdateCheck {
     }
 
     static String readText(File file) {
-        try {
-            return file.isFile() ? new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8) : null;
-        } catch (IOException e) {
-            return null;
-        }
+        return Records.read(file);
     }
 }

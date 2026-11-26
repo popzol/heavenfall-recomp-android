@@ -12,7 +12,7 @@ public class AutoPlayTest {
         in.storage = HomeModel.Storage.READY;
         in.game = HomeModel.Source.GOOD;
         in.update = HomeModel.Source.GOOD;
-        in.installed = new Installed("beta", "0.2.3", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
+        in.installed = Support.installed("beta", "0.2.3", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
         in.library = good ? HomeModel.Library.GOOD : HomeModel.Library.NONE;
         in.appVersion = "1.0.0";
         in.latestApp = "v1.0.0";

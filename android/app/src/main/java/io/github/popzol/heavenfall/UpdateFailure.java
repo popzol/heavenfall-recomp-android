@@ -34,6 +34,9 @@ public enum UpdateFailure {
     APPLY_FAILED("hf_fail_apply_failed", "hf_advice_resume"),
     BUILD_SPACE("hf_fail_build_space", "hf_advice_space"),
     BUILD_MEMORY("hf_fail_build_memory", "hf_advice_memory"),
+    BUILD_BATTERY("hf_fail_build_battery", "hf_advice_battery"),
+    /** The installed mod's code is not the one installed.json recorded: the mod is made again, never built as it is. */
+    MOD_CHANGED("hf_fail_mod_changed", "hf_advice_reinstall"),
     BUILD_TOOLS("hf_fail_build_tools", "hf_advice_resume"),
     BUILD_GAME_FILES("hf_fail_build_game_files", "hf_advice_game_files"),
     BUILD_COMPILE("hf_fail_build_compile", "hf_advice_share_log"),

@@ -414,8 +414,11 @@ public class ImportActivity extends Activity {
             boolean code = changesCode(root);
             File to = new File(mods, name);
             delete(to);  // (the same mod again: the new copy replaces it, its place and state kept)
+            // BEGIN heavenfall: a code mod is off before it is in load/mods (a kill between the two never leaves it on),
+            // and off even when the order file had it on
+            if (code) io.github.popzol.heavenfall.ModOrder.keepOff(modsDir(), name, true);
+            // END heavenfall
             if (!root.renameTo(to)) throw new Refused("unwritable", to.getPath());
-            if (code) keepOff(modsDir(), name);
             Log.i(TAG, "mod import: " + name + (code ? " (it changes the code)" : ""));
             return name + "\n" + (code ? "1" : "0");
         } finally {
@@ -428,6 +431,12 @@ public class ImportActivity extends Activity {
      * GameFolderActivity.syncMods's, for a mod of the game folder only 1.0's search finds.)
      */
     static void keepOff(File mods, String name) throws IOException {
+        // BEGIN heavenfall: the file written whole (ModOrder), never truncated first
+        if (mods != null) {
+            io.github.popzol.heavenfall.ModOrder.keepOff(mods, name, false);
+            return;
+        }
+        // END heavenfall
         File list = new File(mods, "load_order.txt");
         List<String> lines = new ArrayList<>();
         if (list.isFile()) {

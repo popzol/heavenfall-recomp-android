@@ -12,7 +12,6 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Log;
 
-import java.io.File;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import io.github.popzol.heavenfall.Control;
@@ -39,7 +38,6 @@ import io.github.popzol.heavenfall.UrlMap;
 public final class UpdateService extends Service {
     static final String TAG = "Heavenfall";
     static final String ACTION_CANCEL = "io.github.popzol.heavenfall.CANCEL_UPDATE";
-    private static final String EXTRA_JOB = "job_file";
     private static final long WAKE_LOCK_MS = 6L * 60 * 60 * 1000;
     private static final long NOTE_EVERY_MS = 1000;
 
@@ -101,7 +99,8 @@ public final class UpdateService extends Service {
                 return false;
             }
             publish(JobProgress.starting(request.basePermille));
-            Intent intent = new Intent(context, UpdateService.class).putExtra(EXTRA_JOB, request.paths.jobFile.getPath());
+            // (no path goes in the intent: the service reads the saved request from the launcher's fixed place)
+            Intent intent = new Intent(context, UpdateService.class);
             try {
                 context.getApplicationContext().startForegroundService(intent);
             } catch (RuntimeException e) {
@@ -120,9 +119,12 @@ public final class UpdateService extends Service {
         if (c != null) c.cancel();
     }
 
-    /** The job saved by the last {@link #start}, or null (finished jobs delete theirs). */
+    /**
+     * The job saved by the last {@link #start}, or null (finished jobs delete theirs; a record that cannot be read, or
+     * whose dumps are not files of the game folder, is no job). Its places are the launcher's own, never the record's.
+     */
     public static UpdateRequest savedRequest(Context context) {
-        return JobState.savedRequest(Locations.jobFile(context));
+        return JobState.savedRequest(Locations.places(context), Locations.gameFolder(context));
     }
 
     /**
@@ -133,7 +135,7 @@ public final class UpdateService extends Service {
         UpdateRequest saved = savedRequest(context);
         if (saved == null) return false;
         String running = runningVersion(context);
-        Resume note = JobState.note(saved.paths);
+        Resume note = JobState.note(saved.paths.places);
         if (note != null && note.verdict(running) != Resume.Verdict.GO) note = null;
         if (!start(context, saved.resumed(note, running))) return false;
         Notes.cancelResume(context);
@@ -142,12 +144,23 @@ public final class UpdateService extends Service {
 
     /**
      * For {@code HomeModel.Input.job}: RUNNING while a job runs, HALF_DONE when one was left half-done
-     * ({@link io.github.popzol.heavenfall.UpdatePlan#jobLeft}: a resume note the app can go on with, a ".part"
-     * download, a staging folder), else NONE.
+     * ({@link io.github.popzol.heavenfall.UpdatePlan#jobLeft}: a resume note the app can go on with, a staging
+     * folder), else NONE.
      */
     public static HomeModel.Job jobState(Context context) {
         if (running()) return HomeModel.Job.RUNNING;
-        return JobState.left(Locations.jobFile(context), runningVersion(context));
+        return JobState.left(Locations.places(context), Locations.gameFolder(context), runningVersion(context));
+    }
+
+    /** Home's Discard, after its question: what the half-done job left is deleted (never while a job runs). */
+    public static boolean discard(Context context) {
+        synchronized (UpdateService.class) {
+            if (running()) return false;
+            boolean ok = JobState.discard(Locations.places(context));
+            Notes.cancelResume(context);
+            publish(JobProgress.IDLE);
+            return ok;
+        }
     }
 
     static String runningVersion(Context c) {
@@ -162,11 +175,12 @@ public final class UpdateService extends Service {
     static void afterReplace(Context context) {
         UpdateRequest saved = savedRequest(context);
         if (saved == null) return;
-        Resume note = JobState.note(saved.paths);
+        Resume note = JobState.note(saved.paths.places);
         if (note == null) return;
         String running = runningVersion(context);
         if (note.verdict(running) != Resume.Verdict.GO) {
-            JobState.left(saved.paths.jobFile, running);   // forgets a note the install never made good
+            // forgets a note the install never made good
+            JobState.left(saved.paths.places, Locations.gameFolder(context), running);
             return;
         }
         boolean started = false;
@@ -207,8 +221,7 @@ public final class UpdateService extends Service {
             if (!running()) stopSelf();
             return START_NOT_STICKY;
         }
-        String path = intent == null ? null : intent.getStringExtra(EXTRA_JOB);
-        UpdateRequest request = path == null ? null : JobState.savedRequest(new File(path));
+        UpdateRequest request = intent == null ? null : savedRequest(this);
         Thread w = worker;
         if (request == null || (w != null && w.isAlive())) {
             if (w == null || !w.isAlive()) stopSelf();
@@ -243,8 +256,8 @@ public final class UpdateService extends Service {
             Locations.recoverMod(app);   // a swap cut short is put right before this job touches the mod
             UrlMap map = Networks.urlMap(app);
             UpdateRunner.Parts parts = new UpdateRunner.Parts(new ReleaseClient(map), new Downloader(map),
-                    new SelfUpdate(app), applier, new PhoneLibraryBuilder(app, request.paths.libraryDir),
-                    Config.editions(app), Config.tuning(app), line -> Log.i(TAG, line));
+                    new SelfUpdate(app), applier, new PhoneLibraryBuilder(app, Config.tuning(app)),
+                    Config.editions(app), Config.tuning(app), line -> Log.i(TAG, line), new PhoneConditions(app));
             end = new UpdateRunner(parts, p -> {
                 publish(p);
                 note(p);

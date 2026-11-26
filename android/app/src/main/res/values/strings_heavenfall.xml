@@ -157,7 +157,7 @@
     <string name="hf_note_channel">Updates</string>
     <string name="hf_note_cancel">Cancel</string>
     <string name="hf_note_running_title">Updating Heavenfall</string>
-    <string name="hf_note_done_title">Heavenfall is updated</string>
+    <string name="hf_note_done_title">Heavenfall is up to date</string>
     <string name="hf_note_failed_title">The update stopped</string>
     <string name="hf_note_cancelled_title">The update was cancelled</string>
     <string name="hf_note_confirm_title">Confirm the new version</string>
@@ -249,4 +249,22 @@
     <string name="hf_xx_state_found">MH XX was found in the game folder.</string>
     <string name="hf_xx_state_in_use">MH XX is part of your Heavenfall.</string>
     <string name="hf_xx_advice_update">It is added at the next update.</string>
+    <string name="hf_btn_reinstall">Reinstall</string>
+    <string name="hf_state_mod_changed">The installed mod was changed outside the app: reinstall it to play</string>
+    <string name="hf_state_mod_missing">The installed mod is missing: reinstall it to play</string>
+    <string name="hf_state_rebuild_unknown">The game\'s code has to be built again: the app cannot tell it is the one it built</string>
+    <string name="hf_fail_build_battery">The battery is too low to build the game\'s code</string>
+    <string name="hf_fail_mod_changed">The installed mod is not the one the app made, so its code is not built</string>
+    <string name="hf_advice_reinstall">Tap Reinstall: the mod is made again from the release.</string>
+    <string name="hf_btn_discard">Discard</string>
+    <string name="hf_discard_title">Discard the unfinished update?</string>
+    <string name="hf_discard_text">What it downloaded and made so far is deleted. The installed version stays, and the next update starts from the beginning.</string>
+    <string name="hf_toast_discard_failed">Some files of the unfinished update could not be deleted.</string>
+    <string name="hf_btn_allow_notifications">Allow notifications</string>
+    <string name="hf_replace_title">Heavenfall closes to update itself</string>
+    <string name="hf_replace_text">To install its new version the app closes. The update goes on by itself: its bar stays in the notifications, and a notification tells you when it ends. Tap it to come back to Heavenfall.</string>
+    <string name="hf_btn_update">Update</string>
+    <string name="hf_note_end_channel">Update results</string>
+    <string name="hf_note_done_text">Tap to play.</string>
+    <string name="hf_note_cancelled_text">Tap to open Heavenfall: the update goes on from where it stopped.</string>
 </resources>

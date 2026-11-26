@@ -44,6 +44,9 @@ final class AppHome {
 
     /** The folder: the private one once ensure() moved there, else the external one (the private one with no external storage). */
     static File home(Context c) {
+        // BEGIN heavenfall: Android 9 and 10, the private folder always (privateFromStart)
+        if (privateOnly()) return c.getFilesDir();
+        // END heavenfall
         File moved = chosen(c);
         if (moved != null) return moved;
         File f = c.getExternalFilesDir(null);
@@ -62,6 +65,12 @@ final class AppHome {
 
     /** At the start, before anything is written (GameFolderActivity, and GameActivity for a test run started with adb). */
     static synchronized void ensure(Context c) {
+        // BEGIN heavenfall
+        if (privateOnly()) {
+            privateFromStart(c);
+            return;
+        }
+        // END heavenfall
         if (chosen(c) != null) return;
         File ext = c.getExternalFilesDir(null);
         if (ext == null) return;  // (no external storage at this moment: the private folder for this run, nothing decided)
@@ -88,6 +97,51 @@ final class AppHome {
         writeText(new File(own, MARK), own.getAbsolutePath());
         Log.i(TAG, "home: " + count[0] + " file(s) copied from " + ext);
     }
+
+    // BEGIN heavenfall: on Android 9 and 10 any app with the storage permission can write Android/data, so there the
+    // whole home (the mod, the saves, the settings) is the private folder from the start, and home.txt says so to the
+    // game. What the app made in the external folder is copied once, as for a move, but not user/load/mods: code can be
+    // among the mods (the launcher makes its mod again; the Mods page copies the game folder's). No notice: nothing the
+    // player chose moved.
+    static boolean privateOnly() {
+        return android.os.Build.VERSION.SDK_INT < 30;
+    }
+
+    private static void privateFromStart(Context c) {
+        File own = c.getFilesDir();
+        File mark = new File(own, MARK);
+        if (mark.isFile() && own.getAbsolutePath().equals(read(mark))) return;
+        File ext = c.getExternalFilesDir(null);
+        int[] count = {0};
+        File[] kids = ext == null ? null : ext.listFiles();
+        if (kids != null)
+            for (File k : kids) {
+                if (skipped(k.getName())) continue;
+                if (k.isDirectory() && k.getName().equals("user")) copyUser(k, new File(own, "user"), count);
+                else if (k.isDirectory() ? owned(k.getName()) : k.isFile() && k.length() <= TOP_FILE_MAX)
+                    copyTree(k, new File(own, k.getName()), count);
+            }
+        writeText(mark, own.getAbsolutePath());
+        Log.i(TAG, "home: the private folder " + own + " (Android 9 and 10); " + count[0] + " file(s) copied from " + ext);
+    }
+
+    /** user/ without load/mods. */
+    private static void copyUser(File user, File to, int[] count) {
+        to.mkdirs();
+        File[] list = user.listFiles();
+        if (list == null) return;
+        for (File f : list) {
+            if (f.isDirectory() && f.getName().equals("load")) {
+                File[] load = f.listFiles();
+                if (load != null)
+                    for (File g : load)
+                        if (!(g.isDirectory() && g.getName().equals("mods"))) copyTree(g, new File(new File(to, "load"), g.getName()), count);
+            } else {
+                copyTree(f, new File(to, f.getName()), count);
+            }
+        }
+    }
+    // END heavenfall
 
     /** Once after a move: the old folder (shown to the player), else null. The note is gone afterwards. */
     static String movedNotice(Context c) {

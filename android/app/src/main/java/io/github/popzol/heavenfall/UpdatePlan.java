@@ -262,8 +262,9 @@ public final class UpdatePlan {
      * {@code libraryPresent} whether the library file is on disk, {@code onDiskId} the id found beside it and
      * {@code wantedId} the id of the app's tools.
      */
-    public static boolean buildStillNeeded(Installed applied, boolean libraryPresent, String onDiskId, String wantedId) {
-        return applied.libraryState(libraryPresent, onDiskId, wantedId) != HomeModel.Library.GOOD;
+    public static boolean buildStillNeeded(Installed applied, LibraryBuilder.State library, String wantedId) {
+        return applied.libraryState(library.present, library.id, wantedId, library.matches(applied))
+                != HomeModel.Library.GOOD;
     }
 
     /** The sum of the steps' weights. */
@@ -289,19 +290,29 @@ public final class UpdatePlan {
 
     /** The time left, in milliseconds, with {@code stepIndex} steps done and the running step {@code fraction} through. */
     public long remainingMs(int stepIndex, double fraction) {
+        return remainingMs(stepIndex, fraction, -1);
+    }
+
+    /**
+     * The same, with the running step's own measure of its time left ({@code stepMsLeft}, a build's pace:
+     * {@link BuildEta}) in place of the plan's estimate for that step; a negative one leaves the estimate.
+     */
+    public long remainingMs(int stepIndex, double fraction, long stepMsLeft) {
         if (stepIndex >= steps.size()) return 0;
         double f = Math.max(0.0, Math.min(1.0, fraction));
-        long left = Math.round(steps.get(stepIndex).weightMs * (1.0 - f));
+        long left = stepMsLeft >= 0 ? stepMsLeft : Math.round(steps.get(stepIndex).weightMs * (1.0 - f));
         for (int i = stepIndex + 1; i < steps.size(); i++) left += steps.get(i).weightMs;
         return left;
     }
 
     /**
-     * Whether a job was left half-done: a resume note the app can go on with, a ".part" download, or a staging
-     * folder. (An interrupted build is not here: it shows as a library that is not good.)
+     * Whether a job was left half-done: past its downloads, a resume note the app can go on with (the app replaced
+     * itself) or a staging folder (the mod was being made). A ".part" download, a failed download or a declined APK
+     * install is not half-done: nothing installed was touched, and the next Update goes on from the bytes there. (An
+     * interrupted build is not here either: it shows as a library that is not good.)
      */
-    public static HomeModel.Job jobLeft(Resume note, String runningApp, boolean partialDownloads, boolean stagingFolder) {
+    public static HomeModel.Job jobLeft(Resume note, String runningApp, boolean stagingFolder) {
         boolean go = note != null && note.verdict(runningApp) == Resume.Verdict.GO;
-        return go || partialDownloads || stagingFolder ? HomeModel.Job.HALF_DONE : HomeModel.Job.NONE;
+        return go || stagingFolder ? HomeModel.Job.HALF_DONE : HomeModel.Job.NONE;
     }
 }
