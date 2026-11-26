@@ -50,11 +50,11 @@ public class StringsTest {
     private static Set<String> keysTheCodeCanReturn() {
         Set<String> keys = new TreeSet<>();
         Tuning tuning = Support.tuning();
-        HomeModel model = new HomeModel(tuning);
+        HomeModel model = new HomeModel(tuning, Support.buildNeeds());
         String[] latest = {null, "v0.2.3", "v0.3"};
         Installed none = null;
-        Installed plain = new Installed("beta", "0.2.3", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
-        Installed withXx = new Installed("beta", "0.2.3", "s", Support.sha('a'), true, Support.sha('b'), "t", Support.sha('b'));
+        Installed plain = Support.installed("beta", "0.2.3", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
+        Installed withXx = Support.installed("beta", "0.2.3", "s", Support.sha('a'), true, Support.sha('b'), "t", Support.sha('b'));
         for (Storage st : Storage.values())
             for (Source game : Source.values())
                 for (Source update : Source.values())
@@ -81,7 +81,7 @@ public class StringsTest {
                                                 in.checking = low == 1;
                                                 in.freeBytes = low == 1 ? 1 : -1;
                                                 in.batteryPercent = low == 1 ? 1 : -1;
-                                                in.availableMemoryMb = low == 1 ? 1 : -1;
+                                                in.memoryInAllMb = low == 1 ? 1 : -1;
                                                 collect(keys, model.compute(in));
                                             }
         for (HomeModel.More m : HomeModel.More.values()) keys.add(m.labelKey());
@@ -180,7 +180,7 @@ public class StringsTest {
     public void argumentsMatchPlaceholders() throws Exception {
         Map<String, String> en = strings("src/main/res/values/strings_heavenfall.xml");
         Tuning tuning = Support.tuning();
-        HomeModel model = new HomeModel(tuning);
+        HomeModel model = new HomeModel(tuning, Support.buildNeeds());
         HomeModel.Input in = new HomeModel.Input();
         in.game = Source.GOOD;
         in.update = Source.GOOD;
@@ -189,8 +189,8 @@ public class StringsTest {
         in.latestApp = "v1.1";
         in.freeBytes = 1;
         in.batteryPercent = 1;
-        in.availableMemoryMb = 1;
-        in.installed = new Installed("beta", "0.2", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
+        in.memoryInAllMb = 1;
+        in.installed = Support.installed("beta", "0.2", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
         in.library = Library.OTHER_TOOLS;
         in.libraryId = "x";
         HomeModel.Output out = model.compute(in);
@@ -206,7 +206,7 @@ public class StringsTest {
         for (HomeModel.Block b : out.blocks) checkArgs(en, b.reason);
         in.latestMod = "v0.3";
         in.library = Library.OTHER_TOOLS;
-        in.installed = new Installed("beta", "0.3", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
+        in.installed = Support.installed("beta", "0.3", "s", Support.sha('a'), false, Support.sha('b'), "t", Support.sha('b'));
         in.latestApp = null;
         checkArgs(en, model.compute(in).state);
     }

@@ -18,10 +18,10 @@ import io.github.popzol.heavenfall.HomePresenter.Command;
 
 public class HomePresenterTest {
     private static final long GB = 1L << 30;
-    private final HomeModel model = new HomeModel(Support.tuning());
+    private final HomeModel model = Support.model();
 
     private static Installed installed(String version, boolean xx) {
-        return new Installed("beta", version, "s.hfpatch", sha('a'), xx, sha('b'), "tools-7", sha('b'));
+        return Support.installed("beta", version, "s.hfpatch", sha('a'), xx, sha('b'), "tools-7", sha('b'));
     }
 
     /** Everything good: 0.2.3 installed, the library good, the latest known and the same, plenty of room. */
@@ -35,7 +35,7 @@ public class HomePresenterTest {
         in.latestApp = "v1.0.0";
         in.latestMod = "v0.2.3";
         in.freeBytes = 50 * GB;
-        in.availableMemoryMb = 6000;
+        in.memoryInAllMb = 6000;
         in.batteryPercent = 80;
         return in;
     }
@@ -202,32 +202,67 @@ public class HomePresenterTest {
         assertNull(s.bar.timeLeft);
     }
 
-    /** A failure shows its reason and its advice and the button is Resume, also when it stopped before writing anything. */
+    /**
+     * F3: a failure before anything was touched (a download) is not a half-done job: the button stays the one that
+     * starts the job (here Install), with the failure's reason and advice above it.
+     */
     @Test
-    public void aFailureShowsItsReasonAndLeavesResume() {
+    public void aFailureShowsItsReasonAboveTheUsualButton() {
         UpdateException failure = new UpdateException(UpdateFailure.NETWORK, "x");
         JobProgress failed = JobProgress.failed(failure, 300);
         HomeModel.Input in = good();
         in.installed = null;
-        in.job = PhoneFacts.effectiveJob(Job.NONE, failed, true);
+        in.job = PhoneFacts.effectiveJob(Job.NONE, Job.NONE);
         HomePresenter.Screen s = screen(in, failed, true, false);
-        assertEquals(Job.HALF_DONE, in.job);
-        assertEquals("hf_btn_resume", s.main.label.key);
-        assertEquals(Command.RESUME_JOB, s.main.press());
+        assertEquals(Job.NONE, in.job);
+        assertEquals("hf_btn_install", s.main.label.key);
+        assertEquals(Command.START_JOB, s.main.press());
         assertNotNull(s.failure);
         assertEquals(failure.reason, s.failure.reason);
         assertEquals(failure.advice, s.failure.advice);
         assertNull(s.bar);
     }
 
-    /** A cancelled job also leaves Resume with its words; a failure whose request is gone does not invent one. */
+    /** The job as Home sees it: a running one, else what the last one left on disk; a stopped job invents none. */
     @Test
-    public void cancelledLeavesResumeAndNoRequestNoResume() {
-        JobProgress cancelled = JobProgress.failed(new UpdateException(UpdateFailure.CANCELLED, "x"), 500);
-        assertEquals(Job.HALF_DONE, PhoneFacts.effectiveJob(Job.NONE, cancelled, true));
-        assertEquals(Job.NONE, PhoneFacts.effectiveJob(Job.NONE, cancelled, false));
-        assertEquals(Job.NONE, PhoneFacts.effectiveJob(Job.NONE, JobProgress.IDLE, true));
-        assertEquals(Job.RUNNING, PhoneFacts.effectiveJob(Job.RUNNING, cancelled, true));
+    public void theJobIsRunningOrWhatIsLeftOnDisk() {
+        assertEquals(Job.HALF_DONE, PhoneFacts.effectiveJob(Job.NONE, Job.HALF_DONE));
+        assertEquals(Job.NONE, PhoneFacts.effectiveJob(Job.NONE, Job.NONE));
+        assertEquals(Job.NONE, PhoneFacts.effectiveJob(Job.NONE, null));
+        assertEquals(Job.RUNNING, PhoneFacts.effectiveJob(Job.RUNNING, Job.HALF_DONE));
+    }
+
+    /**
+     * F3: a half-done job never takes Play away from an installed game whose library is good, and offers Discard
+     * beside Resume (Resume itself is never blocked: each step checks what it needs when it starts).
+     */
+    @Test
+    public void halfDoneKeepsPlayAndOffersDiscard() {
+        HomeModel.Input in = good();
+        in.job = Job.HALF_DONE;
+        in.batteryPercent = 3;
+        in.charging = false;
+        HomePresenter.Screen s = screen(in, JobProgress.IDLE, true, false);
+        assertEquals("hf_btn_resume", s.main.label.key);
+        assertTrue(s.main.enabled);
+        assertNotNull("Play stays beside Resume", s.play);
+        assertEquals(Command.PLAY, s.play.press());
+        assertNotNull(s.discard);
+        assertEquals(Command.DISCARD_JOB, s.discard.press());
+        in.library = HomeModel.Library.OTHER_MOD;
+        assertNull("no Play when the library is not good", screen(in, JobProgress.IDLE, true, false).play);
+    }
+
+    /** A job that may replace the app says so first (the app closes, the update goes on in the notifications). */
+    @Test
+    public void anUpdateThatReplacesTheAppIsAnnounced() {
+        HomeModel.Input in = good();
+        in.latestApp = "v9.0.0";
+        HomePresenter.Screen s = screen(in, JobProgress.IDLE, true, false);
+        assertEquals(Command.START_JOB, s.main.press());
+        assertTrue(s.replacesApp);
+        in.latestApp = in.appVersion;
+        assertFalse(screen(in, JobProgress.IDLE, true, false).replacesApp);
     }
 
     /** No failure card when the job did not fail (the model's own state line says what is going on). */

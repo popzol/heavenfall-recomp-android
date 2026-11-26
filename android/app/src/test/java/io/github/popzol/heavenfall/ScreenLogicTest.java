@@ -16,7 +16,7 @@ import org.junit.Test;
 /** The small pure parts of the screens: the facts into the model's input, what a tap asks the job for, the time, the language. */
 public class ScreenLogicTest {
     private static Installed installed(boolean xx, String libraryId, String libraryCode) {
-        return new Installed("beta", "0.2.3", "s", sha('a'), xx, sha('b'), libraryId, libraryCode);
+        return Support.installed("beta", "0.2.3", "s", sha('a'), xx, sha('b'), libraryId, libraryCode);
     }
 
     // ---- PhoneFacts
@@ -56,15 +56,10 @@ public class ScreenLogicTest {
         PhoneFacts f = new PhoneFacts();
         f.wantedId = "tools-7";
         assertEquals(Library.NONE, f.library());
-        f.libraryPresent = true;
-        f.libraryIdOnDisk = "tools-7";
-        assertEquals("a library with no record of the mod", Library.OTHER_TOOLS, f.library());
+        f.library = new LibraryBuilder.State(true, "tools-7", null);
+        assertEquals("a library with no record is not one this app built", Library.UNKNOWN, f.library());
         f.installed = installed(false, "tools-7", sha('b'));
-        assertEquals(Library.GOOD, f.library());
-        f.installed = installed(false, "tools-7", sha('c'));
-        assertEquals(Library.OTHER_MOD, f.library());
-        f.libraryIdOnDisk = "tools-6";
-        assertEquals(Library.OTHER_TOOLS, f.library());
+        assertEquals("a library that is not the recorded file", Library.UNKNOWN, f.library());
     }
 
     /** The facts fill the phone's side of the input and leave the check's answers alone. */
@@ -74,7 +69,7 @@ public class ScreenLogicTest {
         f.permission = true;
         f.folder = new File("x");
         f.freeBytes = 123;
-        f.availableMemoryMb = 456;
+        f.memoryInAllMb = 456;
         f.batteryPercent = 77;
         f.charging = true;
         f.appVersion = "1.2.3";
@@ -91,7 +86,7 @@ public class ScreenLogicTest {
         assertTrue(in.releaseHasXxSet);
         assertTrue(in.checking);
         assertEquals(123, in.freeBytes);
-        assertEquals(456, in.availableMemoryMb);
+        assertEquals(456, in.memoryInAllMb);
         assertEquals(77, in.batteryPercent);
         assertTrue(in.charging);
         assertEquals("1.2.3", in.appVersion);

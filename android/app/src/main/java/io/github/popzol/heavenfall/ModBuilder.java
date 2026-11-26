@@ -69,13 +69,16 @@ public final class ModBuilder {
 
     /** The mod that was put in place. */
     public static final class Made {
-        /** SHA-256 of the mod's code (what the code library is built from). */
+        /** SHA-256 of the mod's executable ({@code exefs/code.bin}), as the layer hashed it. */
         public final String codeSha256;
+        /** The digest of everything in the mod that becomes code ({@link ModCode}), taken before it was put in place. */
+        public final String modCodeSha256;
         public final int files;
         public final long bytes;
 
-        Made(String codeSha256, int files, long bytes) {
+        Made(String codeSha256, String modCodeSha256, int files, long bytes) {
             this.codeSha256 = codeSha256;
+            this.modCodeSha256 = modCodeSha256;
             this.files = files;
             this.bytes = bytes;
         }
@@ -147,13 +150,20 @@ public final class ModBuilder {
             if (!result.ok()) throw new Failed(result.error(), null);
             if (stop.getAsBoolean()) throw new Failed(ApplyError.of(ApplyError.CANCEL, ApplyError.STAGE_WRITE, 0), null);
             checkStaged(staging, result);
+            String modCode;
+            try {
+                modCode = ModCode.digest(staging);
+            } catch (IOException e) {
+                throw new Failed(ApplyError.of(ApplyError.Failure.READ_FAILED), e);
+            }
+            if (modCode == null) throw new Failed(ApplyError.of(ApplyError.Failure.OUTPUT_DIFFERS), null);
             try {
                 r.swap.commit();
             } catch (IOException e) {
                 throw new Failed(ApplyError.of(ApplyError.Failure.SWAP_FAILED), e);
             }
             staged = false;
-            return new Made(result.codeSha256, result.files, result.bytes);
+            return new Made(result.codeSha256, modCode, result.files, result.bytes);
         } finally {
             if (staged) r.swap.discardStaging();
             for (Handle h : open) {

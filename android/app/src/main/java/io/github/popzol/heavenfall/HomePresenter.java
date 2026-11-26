@@ -12,7 +12,9 @@ import java.util.List;
 public final class HomePresenter {
     /** What a tap on a button makes the screen do. */
     public enum Command {
-        NONE, OPEN_ASSISTANT, ASK_ALLOW_INSTALLS, START_JOB, RESUME_JOB, PLAY, OPEN_MORE, CANCEL_JOB
+        NONE, OPEN_ASSISTANT, ASK_ALLOW_INSTALLS, START_JOB, RESUME_JOB, PLAY, OPEN_MORE, CANCEL_JOB,
+        /** Asks first, then deletes what the half-done job left ({@link JobState#discard}). */
+        DISCARD_JOB
     }
 
     public static final class Button {
@@ -64,6 +66,13 @@ public final class HomePresenter {
         public final Button main;
         /** The Play entry beside the big button; null when it is not offered. */
         public final Button play;
+        /** Resume's Discard entry; null when it is not offered. */
+        public final Button discard;
+        /**
+         * The big button's job may replace the app (a newer app is out): the screen says first that the app closes to
+         * install its new version and that the update goes on by itself, its end told in a notification.
+         */
+        public final boolean replacesApp;
         public final Button more;
         /** Null unless a job runs. */
         public final Button cancel;
@@ -74,7 +83,9 @@ public final class HomePresenter {
         public final Text hint;
 
         Screen(Text state, List<HomeModel.Block> blocks, List<Text> notes, HomeModel.Block failure, Bar bar, Button main,
-               Button play, Button more, Button cancel, Text versions) {
+               Button play, Button discard, boolean replacesApp, Button more, Button cancel, Text versions) {
+            this.discard = discard;
+            this.replacesApp = replacesApp;
             this.versions = versions;
             this.hint = bar != null ? ScreenTexts.JOB_HINT : null;
             this.state = state;
@@ -113,7 +124,7 @@ public final class HomePresenter {
         Button more = new Button(new Text("hf_btn_more"), true, Command.OPEN_MORE);
         Text versions = ScreenTexts.versions(in.appVersion, in.installed);
         if (out.button == null) return running(out, progress, more, cancelling, versions);
-        HomeModel.Block failure = out.action == HomeModel.Action.RESUME ? failure(progress) : null;
+        HomeModel.Block failure = startsJob(out.action) ? failure(progress) : null;
         List<HomeModel.Block> blocks = new ArrayList<>();
         if (out.action == HomeModel.Action.SET_UP) {
             if (!out.problems.isEmpty()) blocks.add(out.problems.get(0));
@@ -124,7 +135,24 @@ public final class HomePresenter {
         Button main = new Button(out.button, out.enabled, command);
         Button play = out.canPlay && out.action != HomeModel.Action.PLAY
                 ? new Button(new Text("hf_btn_play"), true, Command.PLAY) : null;
-        return new Screen(out.state, blocks, out.notes, failure, null, main, play, more, null, versions);
+        Button discard = out.canDiscard ? new Button(new Text("hf_btn_discard"), true, Command.DISCARD_JOB) : null;
+        boolean replaces = startsJob(out.action) && out.action != HomeModel.Action.BUILD && appNewer(in);
+        return new Screen(out.state, blocks, out.notes, failure, null, main, play, discard, replaces, more, null,
+                versions);
+    }
+
+    /** The big button starts (or goes on with) an update job: the last job's failure is shown above it. */
+    static boolean startsJob(HomeModel.Action action) {
+        switch (action) {
+            case REINSTALL:
+            case INSTALL:
+            case UPDATE:
+            case BUILD:
+            case RESUME:
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static Screen running(HomeModel.Output out, JobProgress progress, Button more, boolean cancelling,
@@ -134,8 +162,8 @@ public final class HomePresenter {
         Bar bar = new Bar(progress.permille, progress.state, counter, TimeLeft.of(progress.msLeft));
         Button cancel = cancelling ? new Button(new Text("hf_btn_stopping"), false, Command.NONE)
                 : new Button(new Text("hf_btn_cancel"), true, Command.CANCEL_JOB);
-        return new Screen(out.state, Collections.<HomeModel.Block>emptyList(), out.notes, null, bar, null, null, more,
-                cancel, versions);
+        return new Screen(out.state, Collections.<HomeModel.Block>emptyList(), out.notes, null, bar, null, null, null,
+                false, more, cancel, versions);
     }
 
     private static HomeModel.Block failure(JobProgress p) {
@@ -149,6 +177,7 @@ public final class HomePresenter {
         switch (action) {
             case SET_UP:
                 return Command.OPEN_ASSISTANT;
+            case REINSTALL:
             case INSTALL:
             case UPDATE:
                 return asksInstalls ? Command.ASK_ALLOW_INSTALLS : Command.START_JOB;

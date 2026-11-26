@@ -10,9 +10,11 @@ import java.util.Set;
  * The home screen's rules as a pure function of what the app found: one state line, the one big button, what stops
  * that button (with the advice for it), the "More" entries that work now. Nothing here touches the phone.
  *
- * <p>The button, in the order the rules apply: a job running (no button); the setup missing or wrong (SET_UP); a
- * job left half-done (RESUME); nothing installed (INSTALL); a newer app or mod, or MH XX copied since the install
- * (UPDATE: one button for the APK, the mod and the library); the library missing or not made for this mod (BUILD);
+ * <p>The button, in the order the rules apply: a job running (no button); the setup missing or wrong (SET_UP); the
+ * installed mod's code not the one {@code installed.json} recorded, or gone (REINSTALL: the mod is made again, never
+ * built as it is); a job left half-done (RESUME, with Play beside it while the installed game can start, and Discard);
+ * nothing installed (INSTALL); a newer app or mod, or MH XX copied since the install (UPDATE: one button for the APK,
+ * the mod and the library); the library missing, not made for this mod or not the file the last build left (BUILD);
  * otherwise PLAY. Not knowing the latest versions (no network) never takes PLAY away from an installed game whose
  * library is good.
  */
@@ -22,12 +24,18 @@ public final class HomeModel {
     /** The game dump, the 1.3.0 update or the MH XX dump as the app found it. */
     public enum Source { MISSING, ENCRYPTED, WRONG_REGION, WRONG_VERSION, GOOD }
 
-    /** The code library on the phone: none, made by other tools, made for another mod code, or good. */
-    public enum Library { NONE, OTHER_TOOLS, OTHER_MOD, GOOD }
+    /**
+     * The code library on the phone: none, not known to be the one the last build left (no record of it, or another
+     * file), made by other tools, made for another mod code, or good.
+     */
+    public enum Library { NONE, UNKNOWN, OTHER_TOOLS, OTHER_MOD, GOOD }
+
+    /** The installed mod's code against {@code installed.json}: the same, changed since, or gone. */
+    public enum ModCode { GOOD, CHANGED, MISSING }
 
     public enum Job { NONE, RUNNING, HALF_DONE }
 
-    public enum Action { NONE, SET_UP, INSTALL, UPDATE, BUILD, RESUME, PLAY }
+    public enum Action { NONE, SET_UP, REINSTALL, INSTALL, UPDATE, BUILD, RESUME, PLAY }
 
     /** The entries of the "More" list. */
     public enum More {
@@ -57,6 +65,8 @@ public final class HomeModel {
         /** What installed.json says, or null when nothing is installed. */
         public Installed installed;
         public Library library = Library.NONE;
+        /** The installed mod's code (meaningful only with {@link #installed}). */
+        public ModCode modCode = ModCode.GOOD;
         /** The id found beside a library made by other tools ("" for none): shown, never compared here. */
         public String libraryId = "";
         /** The running app's version. */
@@ -68,10 +78,16 @@ public final class HomeModel {
         public boolean releaseHasXxSet;
         /** The check for the latest versions is still running. */
         public boolean checking;
-        /** Free bytes where the downloads and the mod go, available memory in MB, battery percent: -1 unknown. */
+        /**
+         * Free bytes where the downloads, the mod and the build go, the phone's memory in all with its swap in MB,
+         * battery percent: -1 unknown.
+         */
         public long freeBytes = -1;
-        public long availableMemoryMb = -1;
+        public long memoryInAllMb = -1;
         public int batteryPercent = -1;
+        /** The builder's own files a build gives back as room: its work folder and its objects' cache (bytes). */
+        public long builderWorkBytes;
+        public long objectCacheBytes;
         public boolean charging;
         public Job job = Job.NONE;
     }
@@ -128,15 +144,20 @@ public final class HomeModel {
         public String targetVersion;
         /** The Play entry beside the big button when it is not the big button (the installed game can start). */
         public boolean canPlay;
+        /** RESUME: the Discard entry (what the job left is deleted, after a question; the installed game stays). */
+        public boolean canDiscard;
         public Set<More> more = EnumSet.noneOf(More.class);
         /** UPDATE: the update includes building the library (the mod's code changes or the library is not good). */
         public boolean includesBuild;
     }
 
     private final Tuning tuning;
+    private final BuildNeeds needs;
 
-    public HomeModel(Tuning tuning) {
+    /** With the build's own numbers ({@link BuildNeeds}) for the space and memory a build needs. */
+    public HomeModel(Tuning tuning, BuildNeeds needs) {
         this.tuning = tuning;
+        this.needs = needs == null ? BuildNeeds.NONE : needs;
     }
 
     public Output compute(Input in) {
@@ -157,16 +178,30 @@ public final class HomeModel {
             out.problems = problems;
             return out;
         }
+        Installed installed = in.installed;
+        if (installed != null && in.modCode != ModCode.GOOD) {
+            out.action = Action.REINSTALL;
+            out.button = new Text("hf_btn_reinstall");
+            out.state = new Text(in.modCode == ModCode.MISSING ? "hf_state_mod_missing" : "hf_state_mod_changed");
+            out.includesBuild = true;
+            List<Block> blocks = new ArrayList<>();
+            addNetwork(in, blocks);
+            blocks.addAll(heavy(in, true, true));
+            out.blocks = blocks;
+            out.enabled = blocks.isEmpty();
+            return out;
+        }
         if (in.job == Job.HALF_DONE) {
+            // only the job knows the steps left: each checks its own space, battery and memory when it starts
             out.action = Action.RESUME;
             out.button = new Text("hf_btn_resume");
             out.state = new Text("hf_state_half_done");
             out.includesBuild = true;
-            out.blocks = heavy(in, true);
-            out.enabled = out.blocks.isEmpty();
+            out.enabled = true;
+            out.canPlay = installed != null && in.library == Library.GOOD;
+            out.canDiscard = true;
             return out;
         }
-        Installed installed = in.installed;
         if (installed == null) {
             out.action = Action.INSTALL;
             out.button = new Text("hf_btn_install");
@@ -174,7 +209,7 @@ public final class HomeModel {
             out.includesBuild = true;
             List<Block> blocks = new ArrayList<>();
             addNetwork(in, blocks);
-            blocks.addAll(heavy(in, true));
+            blocks.addAll(heavy(in, true, true));
             out.blocks = blocks;
             out.enabled = blocks.isEmpty();
             return out;
@@ -199,7 +234,7 @@ public final class HomeModel {
                 out.state = new Text("hf_state_app_update", out.targetVersion);
             }
             out.button = new Text("hf_btn_update_to", out.targetVersion);
-            List<Block> blocks = heavy(in, build);
+            List<Block> blocks = heavy(in, true, build);
             out.blocks = blocks;
             out.enabled = blocks.isEmpty();
             out.canPlay = playable;
@@ -209,12 +244,13 @@ public final class HomeModel {
             out.action = Action.BUILD;
             out.button = new Text("hf_btn_build");
             out.state = in.library == Library.NONE ? new Text("hf_state_build_needed")
+                    : in.library == Library.UNKNOWN ? new Text("hf_state_rebuild_unknown")
                     : in.library == Library.OTHER_TOOLS && !in.libraryId.isEmpty()
                             ? new Text("hf_state_rebuild_other_tools", in.libraryId)
                     : in.library == Library.OTHER_TOOLS ? new Text("hf_state_rebuild_other_tools_noid")
                     : new Text("hf_state_rebuild_other_mod");
             out.includesBuild = true;
-            out.blocks = heavy(in, true);
+            out.blocks = heavy(in, false, true);
             out.enabled = out.blocks.isEmpty();
             return out;
         }
@@ -293,11 +329,17 @@ public final class HomeModel {
         else blocks.add(new Block(new Text("hf_block_no_network"), new Text("hf_advice_connect")));
     }
 
-    /** Space, battery and memory against the tuning, for an action that downloads and, with {@code build}, builds. */
-    private List<Block> heavy(Input in, boolean build) {
+    /**
+     * Space, battery and memory for an action that, with {@code downloads}, downloads and applies a mod
+     * ({@code tuning.json}'s room) and, with {@code build}, builds the library: the build's own numbers
+     * ({@link BuildNeeds}: the free space less the room the builder's own files give back, and the phone's memory in
+     * all against the translation's peak) and {@code tuning.json}'s battery.
+     */
+    private List<Block> heavy(Input in, boolean downloads, boolean build) {
         List<Block> blocks = new ArrayList<>();
-        long need = build ? tuning.minFreeBuildBytes() : tuning.minFreeDownloadBytes();
-        if (in.freeBytes >= 0 && in.freeBytes < need) {
+        long need = downloads ? tuning.minFreeDownloadBytes() : 0;
+        if (build) need = Math.max(need, needs.freeBytesNeeded(needs.roomBytes(in.builderWorkBytes, in.objectCacheBytes)));
+        if (in.freeBytes >= 0 && need > 0 && in.freeBytes < need) {
             blocks.add(new Block(new Text("hf_block_space", megabytes(need), megabytes(in.freeBytes)),
                     new Text("hf_advice_space")));
         }
@@ -306,9 +348,9 @@ public final class HomeModel {
                 blocks.add(new Block(new Text("hf_block_battery", String.valueOf(in.batteryPercent)),
                         new Text("hf_advice_battery")));
             }
-            if (in.availableMemoryMb >= 0 && in.availableMemoryMb < tuning.minAvailableMemoryMb) {
-                blocks.add(new Block(new Text("hf_block_memory", String.valueOf(in.availableMemoryMb)),
-                        new Text("hf_advice_memory")));
+            if (needs.neverFits(in.memoryInAllMb)) {
+                blocks.add(new Block(new Text("hf_block_memory_never", String.valueOf(in.memoryInAllMb),
+                        String.valueOf(needs.translationPeakMb)), new Text("hf_advice_memory_never")));
             }
         }
         return blocks;
@@ -327,7 +369,8 @@ public final class HomeModel {
             set.add(More.GAME_FOLDER);
             set.add(More.MH_XX);
         }
-        if (in.installed != null && in.storage == Storage.READY && in.game == Source.GOOD && in.update == Source.GOOD) {
+        if (in.installed != null && in.modCode == ModCode.GOOD && in.storage == Storage.READY
+                && in.game == Source.GOOD && in.update == Source.GOOD) {
             // both start a job that reads the two dumps (the build and the mod's maker): never offered without them
             set.add(More.REBUILD);
             if (in.latestMod != null) set.add(More.REINSTALL);

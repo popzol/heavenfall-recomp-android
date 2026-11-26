@@ -11,61 +11,71 @@ import java.nio.file.Files;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import io.github.popzol.heavenfall.BuildEta;
 import io.github.popzol.heavenfall.BuildFailures;
 import io.github.popzol.heavenfall.Control;
 import io.github.popzol.heavenfall.Fraction;
 import io.github.popzol.heavenfall.JobPaths;
-import io.github.popzol.heavenfall.LauncherMod;
 import io.github.popzol.heavenfall.LibraryBuilder;
+import io.github.popzol.heavenfall.LibraryFile;
+import io.github.popzol.heavenfall.Tuning;
 import io.github.popzol.heavenfall.UpdateException;
 import io.github.popzol.heavenfall.UpdateFailure;
 
 /**
  * The code library built by upstream's builder service (tools, translation, compiling, installing; paused by heat and
- * battery, resumable), run under the update job's bar: started with the game, its update and the mod's folder, watched
- * until it ends, cancelled when the job is.
+ * battery, resumable), run under the update job's bar: started with the game, its update and the launcher's mod alone,
+ * watched until it ends, cancelled when the job is. The library is built into the app's private storage
+ * ({@link Locations#libraryDir}), where the game loads it from; nothing in the game folder is built or read as code.
  */
 public final class PhoneLibraryBuilder implements LibraryBuilder {
     /**
-     * phone_build.py's option that takes the app's user folder: the build then reads every code mod that is on in its
-     * load/mods, in the order the game loads them (the same set the game checks the library against). The launcher's
-     * mod is one of them, and the Mods page keeps it on and every other code mod off ({@code LauncherMod}).
+     * phone_build.py's option that takes one mod's own folder (with its exefs): the build compiles the launcher's mod
+     * alone, named by its folder, whatever else is in the mods folder or the load order.
      */
-    static final String MOD_FLAG = "--user-mods";
+    static final String MOD_FLAG = "--mod";
     private static final long START_WAIT_MS = 15_000;
     private static final long STOP_WAIT_MS = 60_000;
 
     private final Context context;
-    private final File libraryDir;
+    private final Tuning tuning;
 
-    public PhoneLibraryBuilder(Context context, File libraryDir) {
+    public PhoneLibraryBuilder(Context context, Tuning tuning) {
         this.context = context.getApplicationContext();
-        this.libraryDir = libraryDir;
+        this.tuning = tuning;
     }
 
-    private File library() {
-        return new File(libraryDir, HeavenfallBridge.libraryFileName());
+    static File library(Context c) {
+        return new File(Locations.libraryDir(c), HeavenfallBridge.libraryFileName());
     }
 
     /** The id the builder writes beside the library: the library's name with ".id" in place of its extension. */
-    private File idFile() {
+    static File idFile(Context c) {
         String name = HeavenfallBridge.libraryFileName();
         int dot = name.lastIndexOf('.');
-        return new File(libraryDir, (dot > 0 ? name.substring(0, dot) : name) + ".id");
+        return new File(Locations.libraryDir(c), (dot > 0 ? name.substring(0, dot) : name) + ".id");
     }
 
-    private String idOnDisk() {
+    static String idOnDisk(Context c) {
         try {
-            File f = idFile();
-            return f.isFile() ? new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).trim() : "";
+            File f = idFile(c);
+            if (!f.isFile() || f.length() > 4096) return "";
+            return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).trim();
         } catch (IOException e) {
             return "";
         }
     }
 
+    /** The library in the private storage as it is now (whether it is the one the last build left: State#matches). */
+    static State stateOf(Context c) {
+        File library = library(c);
+        boolean present = library.isFile() && library.canRead();
+        return new State(present, idOnDisk(c), present ? library : null);
+    }
+
     @Override
     public State state() {
-        return new State(library().canRead(), idOnDisk());
+        return stateOf(context);
     }
 
     @Override
@@ -74,20 +84,31 @@ public final class PhoneLibraryBuilder implements LibraryBuilder {
     }
 
     @Override
-    public String build(JobPaths paths, Control control, Fraction progress) throws UpdateException {
+    public Built build(JobPaths paths, Control control, Fraction progress) throws UpdateException {
         if (HeavenfallBridge.buildBusy()) throw new UpdateException(UpdateFailure.BUILD_FAILED, "a build is running");
         HeavenfallBridge.buildAcknowledged();   // the end of an earlier build is not this one's
+        File libraryDir = paths.libraryDir;
         if (!libraryDir.isDirectory() && !libraryDir.mkdirs() && !libraryDir.isDirectory()) {
             throw new UpdateException(UpdateFailure.BUILD_INSTALL, libraryDir.getPath());
         }
+        BuildEta eta = BuildEta.of(tuning);
+        eta.start(System.currentTimeMillis(), HeavenfallBridge.objectsKept(context));
+        progress.msLeft(eta.msLeft(System.currentTimeMillis()));
         Semaphore changed = new Semaphore(0);
         Runnable wake = changed::release;
         HeavenfallBridge.listen(wake);
         try {
-            HeavenfallBridge.startBuild(context, paths.gameDump, paths.updateDump, libraryDir, MOD_FLAG,
-                    LauncherMod.userFolder(Locations.home(context)));
+            HeavenfallBridge.startBuild(context, paths.gameDump, paths.updateDump, libraryDir, MOD_FLAG, paths.modDir);
             HeavenfallBridge.BuildStatus s = awaitStart(changed, control);
+            boolean cacheSaid = false;
             while (s.active) {
+                long now = System.currentTimeMillis();
+                eta.sample(now, s.stage, s.done, s.total);
+                if (!cacheSaid && s.toCompile >= 0) {
+                    eta.cache(now, s.cacheHits, s.toCompile);
+                    cacheSaid = true;
+                }
+                progress.msLeft(eta.msLeft(now));
                 progress.fraction(Math.max(0, s.percent) / 100.0);
                 if (control.isCancelled()) {
                     HeavenfallBridge.cancelBuild(context);
@@ -129,18 +150,24 @@ public final class PhoneLibraryBuilder implements LibraryBuilder {
         }
     }
 
-    private String result(HeavenfallBridge.BuildStatus s, Control control, Fraction progress) throws UpdateException {
+    private Built result(HeavenfallBridge.BuildStatus s, Control control, Fraction progress) throws UpdateException {
         switch (s.status) {
             case "done": {
                 progress.fraction(1.0);
-                String id = idOnDisk();
-                return id.isEmpty() ? wantedId() : id;
+                String id = idOnDisk(context);
+                if (id.isEmpty()) throw new UpdateException(UpdateFailure.BUILD_INSTALL, "no id beside the library");
+                try {
+                    // (about 120 MB hashed once, here: the record installed.json keeps, checked before every start)
+                    return new Built(id, LibraryFile.of(library(context)));
+                } catch (IOException e) {
+                    throw new UpdateException(UpdateFailure.BUILD_INSTALL, "the library cannot be read", e);
+                }
             }
             case "cancelled":
                 // the player's cancel is the job's own; any other stop is the system's (a service time limit)
                 throw new UpdateException(control.isCancelled() ? UpdateFailure.CANCELLED : UpdateFailure.INTERRUPTED, "build");
             default:
-                throw new UpdateException(BuildFailures.forStage(s.errorStage), s.errorStage + ": " + s.errorText);
+                throw BuildFailures.exception(s.errorStage, s.errorText);
         }
     }
 }

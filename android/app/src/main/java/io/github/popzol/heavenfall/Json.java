@@ -11,14 +11,40 @@ final class Json {
     private Json() {
     }
 
-    /** The object in {@code text}, or null when it is not a JSON object. */
+    /**
+     * Deeper than this, a text is none of the app's records or GitHub's answers: refused before org.json reads it
+     * (its parser recurses once a level, and a thread's stack ends long before a big file's nesting does).
+     */
+    static final int MAX_DEPTH = 32;
+
+    /** The object in {@code text}, or null when it is not a JSON object (or is nested deeper than {@link #MAX_DEPTH}). */
     static JSONObject object(String text) {
-        if (text == null) return null;
+        if (text == null || deeperThan(text, MAX_DEPTH)) return null;
         try {
             return new JSONObject(text);
-        } catch (JSONException e) {
+        } catch (JSONException | RuntimeException e) {
             return null;
         }
+    }
+
+    /** Whether the brackets of {@code text} (outside its strings) nest deeper than {@code max}. */
+    static boolean deeperThan(String text, int max) {
+        int depth = 0;
+        boolean inString = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (inString) {
+                if (c == '\\') i++;
+                else if (c == '"') inString = false;
+            } else if (c == '"') {
+                inString = true;
+            } else if (c == '{' || c == '[') {
+                if (++depth > max) return true;
+            } else if (c == '}' || c == ']') {
+                depth--;
+            }
+        }
+        return false;
     }
 
     static String string(JSONObject o, String key) {

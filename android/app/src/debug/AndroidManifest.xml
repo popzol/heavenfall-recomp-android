@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Debug builds only: test releases may be served over http from a computer on the local network
          (TestReleases; the downloader still talks only to the one host in the player's test file) -->
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+        <!-- Debug builds only: the entry flow and the launcher's other screens open from adb for tests (a release
+             build exports only Home and the game's activity) -->
+        <activity android:name="com.mh4u.port.GameFolderActivity" android:exported="true" tools:replace="android:exported" />
+        <activity android:name="io.github.popzol.heavenfall.app.AssistantActivity" android:exported="true"
+            tools:replace="android:exported" />
+        <activity android:name="io.github.popzol.heavenfall.app.MoreActivity" android:exported="true"
+            tools:replace="android:exported" />
+        <activity android:name="io.github.popzol.heavenfall.app.XxActivity" android:exported="true"
+            tools:replace="android:exported" />
+    </application>
 </manifest>

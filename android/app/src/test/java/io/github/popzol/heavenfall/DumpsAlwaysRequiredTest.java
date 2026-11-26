@@ -15,7 +15,7 @@ import io.github.popzol.heavenfall.HomeModel.Storage;
  * may offer one of them, in any state, without both being right (the job would only end in a toast).
  */
 public class DumpsAlwaysRequiredTest {
-    private static final Installed INSTALLED = new Installed("beta", "0.2.3", "s", Support.sha('a'), false,
+    private static final Installed INSTALLED = Support.installed("beta", "0.2.3", "s", Support.sha('a'), false,
             Support.sha('b'), "t", Support.sha('b'));
 
     /** Whether the dumps are right and no screen at all may start anything that reads them. */
@@ -40,7 +40,7 @@ public class DumpsAlwaysRequiredTest {
     /** Every state of the phone: a missing or wrong update dump never leaves Build, Reinstall, Install or Play offered. */
     @Test
     public void noScreenStartsWhatReadsADumpThatIsNotThere() {
-        HomeModel model = new HomeModel(Support.tuning());
+        HomeModel model = Support.model();
         int states = 0;
         for (Storage storage : Storage.values())
             for (Source game : Source.values())

@@ -53,7 +53,10 @@ public class GameActivity extends SDLActivity {
         // (who started it: "com.android.shell" for adb's am start, the test runs' way with a launch.txt of their own)
         android.net.Uri referrer = getReferrer();
         String by = referrer != null ? referrer.getHost() : null;
-        if (!entered && !"com.android.shell".equals(by)) {
+        // BEGIN heavenfall: adb's start only in a debug build (a referrer can be set by any caller: EntryRule)
+        boolean debuggable = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        if (!io.github.popzol.heavenfall.EntryRule.mayStart(entered, by, debuggable)) {
+        // END heavenfall
             // A start that didn't come through the entry: Android bringing the game's task back after its process ended
             // (Recents), a controller's USB start, another app. The entry's checks must come first (the app's folder, the
             // save folder's start gate with its in-use warning, the notices, the game's files and library), and SDL is made

@@ -30,9 +30,9 @@ public class BuilderApplierTest {
         home = tmp.newFolder("home");
         File mod = LauncherMod.modDir(home);
         write(new File(mod, "exefs/code.bin"), "old code");
-        paths = new JobPaths(new File(home, "dl"), LauncherMod.stagingDir(home), mod, new File(home, "installed.json"),
-                new File(home, "resume.json"), new File(home, "job.json"), tmp.newFile("game"), tmp.newFile("update"),
-                null, new File(home, "lib"));
+        paths = new JobPaths(new JobPaths.Places(new File(home, "dl"), LauncherMod.stagingDir(home), mod,
+                new File(home, "installed.json"), new File(home, "resume.json"), new File(home, "job.json"),
+                new File(home, "lib")), tmp.newFile("game"), tmp.newFile("update"), null);
     }
 
     private static void write(File f, String text) throws IOException {
@@ -113,6 +113,8 @@ public class BuilderApplierTest {
         ModApplier.Applied applied = apply(layer);
         assertEquals("new code", read(code()));
         assertEquals(InstalledStore.sha256(code()), applied.codeSha256);
+        assertEquals("the mod's code digest is the one of the folder put in place", ModCode.digest(paths.modDir),
+                applied.modCodeSha256);
         assertFalse(LauncherMod.stagingDir(home).exists());
         assertFalse(LauncherMod.oldDir(home).exists());
         assertFalse(layer.sawShared);

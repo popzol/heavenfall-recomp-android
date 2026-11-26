@@ -19,6 +19,7 @@ import io.github.popzol.heavenfall.HomeModel;
 import io.github.popzol.heavenfall.HomePresenter;
 import io.github.popzol.heavenfall.JobProgress;
 import io.github.popzol.heavenfall.PhoneFacts;
+import io.github.popzol.heavenfall.ScreenTexts;
 import io.github.popzol.heavenfall.StartChoice;
 import io.github.popzol.heavenfall.Text;
 
@@ -47,19 +48,22 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
     private TextView title, versions, state, failureReason, failureAdvice, jobStep, jobTime, jobHint;
     private LinearLayout blocks, notes, jobBox;
     private BarView bar;
-    private Button main, play, cancel, more;
+    private Button main, play, discard, cancel, more;
 
     @Override
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         language = LanguageSetting.get(this);
-        autoPlay = getIntent().getBooleanExtra(HeavenfallBridge.EXTRA_AUTO_PLAY, false);
+        // the relaunch's ask counts with the one-time token of the private storage only (AutoPlay)
+        autoPlay = AutoPlay.consume(getFilesDir(), getIntent().getStringExtra(HeavenfallBridge.EXTRA_AUTO_PLAY),
+                System.currentTimeMillis());
+        getIntent().removeExtra(HeavenfallBridge.EXTRA_AUTO_PLAY);
         build();
         render();
     }
 
     private HomeModel model() {
-        return new HomeModel(Config.tuning(this));
+        return new HomeModel(Config.tuning(this), Config.buildNeeds(this));
     }
 
     private void build() {
@@ -131,6 +135,11 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
         play.setId(R.id.hf_play);
         play.setOnClickListener(v -> tap(screen == null || screen.play == null ? HomePresenter.Command.NONE : screen.play.press()));
         right.addView(play, wide(-1, 8));
+        discard = button("", false);
+        discard.setId(R.id.hf_discard);
+        discard.setOnClickListener(v -> tap(screen == null || screen.discard == null ? HomePresenter.Command.NONE
+                : screen.discard.press()));
+        right.addView(discard, wide(-1, 8));
         cancel = button("", false);
         cancel.setId(R.id.hf_cancel);
         cancel.setOnClickListener(v -> tap(screen == null || screen.cancel == null ? HomePresenter.Command.NONE : screen.cancel.press()));
@@ -206,7 +215,6 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
         render();
         if (autoPlay && resumed) {   // the first reading after a relaunch of the app's own: it starts the game as the entry did
             autoPlay = false;
-            getIntent().removeExtra(HeavenfallBridge.EXTRA_AUTO_PLAY);
             if (AutoPlay.start(true, output)) Actions.play(this, facts);
         }
     }
@@ -242,7 +250,7 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
             blocks.removeAllViews();
             notes.removeAllViews();
             jobBox.setVisibility(View.GONE);
-            for (Button b : new Button[] {main, play, cancel}) b.setVisibility(View.GONE);
+            for (Button b : new Button[] {main, play, discard, cancel}) b.setVisibility(View.GONE);
             more.setText(str(new Text("hf_btn_more")));
             more.setEnabled(false);
             return;
@@ -284,6 +292,7 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
         }
         show(main, screen.main);
         show(play, screen.play);
+        show(discard, screen.discard);
         show(cancel, screen.cancel);
         more.setVisibility(View.VISIBLE);
         apply(more, screen.more);
@@ -311,11 +320,33 @@ public final class HomeActivity extends ScreenActivity implements UpdateService.
                 Actions.askAllowInstalls(this);
                 break;
             case START_JOB:
-                if (output != null && Actions.start(this, facts, StartChoice.forAction(output.action, input))) recompute();
+                if (output == null) break;
+                StartChoice choice = StartChoice.forAction(output.action, input);
+                Actions.beforeReplace(this, screen != null && screen.replacesApp, () -> {
+                    if (Actions.start(this, facts, choice)) recompute();
+                });
                 break;
             case RESUME_JOB:
-                if (UpdateService.resume(this)) recompute();
-                else refresh();
+                Actions.beforeReplace(this, screen != null && screen.replacesApp, () -> {
+                    if (UpdateService.resume(this)) recompute();
+                    else refresh();
+                });
+                break;
+            case DISCARD_JOB:
+                Actions.askDiscard(this, () -> {
+                    android.content.Context app = getApplicationContext();
+                    new Thread(() -> {   // (thousands of files: never on the main thread)
+                        boolean ok = UpdateService.discard(app);
+                        runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) return;
+                            if (!ok) {
+                                android.widget.Toast.makeText(this, str(ScreenTexts.DISCARD_FAILED),
+                                        android.widget.Toast.LENGTH_LONG).show();
+                            }
+                            refresh();
+                        });
+                    }, "heavenfall-discard").start();
+                });
                 break;
             case PLAY:
                 Actions.play(this, facts);

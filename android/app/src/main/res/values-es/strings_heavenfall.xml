@@ -80,7 +80,8 @@
     <string name="hf_advice_space">Libera espacio en el móvil y vuelve a intentarlo.</string>
     <string name="hf_block_battery">La batería está al %1$s%%</string>
     <string name="hf_advice_battery">Conecta el móvil al cargador antes de seguir: esto tarda mucho.</string>
-    <string name="hf_block_memory">Solo quedan %1$s MB de memoria libre</string>
+    <string name="hf_block_memory_never">Este móvil tiene %1$s MB de memoria; construir el código del juego necesita unos %2$s MB</string>
+    <string name="hf_advice_memory_never">El código del juego no se puede construir en este móvil.</string>
     <string name="hf_advice_memory">Cierra otras apps y vuelve a intentarlo.</string>
 
     <!-- Una versión que no se aceptó -->
@@ -141,6 +142,11 @@
     <string name="hf_fail_apply_failed">No se pudo crear el mod</string>
     <string name="hf_fail_build_space">No hay espacio libre suficiente para construir el código del juego</string>
     <string name="hf_fail_build_memory">El móvil se quedó sin memoria al construir el código del juego</string>
+    <string name="hf_fail_build_space_mb">Para construir el código del juego hacen falta %1$s MB más de espacio libre</string>
+    <string name="hf_fail_build_memory_never">Este móvil no tiene memoria suficiente para construir el código del juego</string>
+    <string name="hf_fail_build_memory_never_mb">Este móvil tiene %1$s MB de memoria; construir el código del juego necesita unos %2$s MB</string>
+    <string name="hf_fail_build_compile_memory">El móvil se quedó sin memoria al compilar una parte del código del juego</string>
+    <string name="hf_advice_compile_memory">Cierra otras apps o reinicia el móvil y vuelve a intentarlo: sigue desde donde se quedó.</string>
     <string name="hf_fail_build_tools">No se pudieron descargar las herramientas para construir el código del juego</string>
     <string name="hf_fail_build_game_files">Tus archivos del juego no son los que necesita la construcción</string>
     <string name="hf_fail_build_compile">La herramienta falló al construir el código del juego</string>
@@ -157,7 +163,7 @@
     <string name="hf_note_channel">Actualizaciones</string>
     <string name="hf_note_cancel">Cancelar</string>
     <string name="hf_note_running_title">Actualizando Heavenfall</string>
-    <string name="hf_note_done_title">Heavenfall está actualizado</string>
+    <string name="hf_note_done_title">Heavenfall está al día</string>
     <string name="hf_note_failed_title">La actualización se detuvo</string>
     <string name="hf_note_cancelled_title">Se canceló la actualización</string>
     <string name="hf_note_confirm_title">Confirma la versión nueva</string>
@@ -249,4 +255,22 @@
     <string name="hf_xx_state_found">MH XX está en la carpeta del juego.</string>
     <string name="hf_xx_state_in_use">MH XX forma parte de tu Heavenfall.</string>
     <string name="hf_xx_advice_update">Se añade en la próxima actualización.</string>
+    <string name="hf_btn_reinstall">Reinstalar</string>
+    <string name="hf_state_mod_changed">El mod instalado se cambió fuera de la app: reinstálalo para jugar</string>
+    <string name="hf_state_mod_missing">Falta el mod instalado: reinstálalo para jugar</string>
+    <string name="hf_state_rebuild_unknown">Hay que construir de nuevo el código del juego: la app no puede saber si es el que construyó</string>
+    <string name="hf_fail_build_battery">La batería está demasiado baja para construir el código del juego</string>
+    <string name="hf_fail_mod_changed">El mod instalado no es el que hizo la app, así que su código no se construye</string>
+    <string name="hf_advice_reinstall">Toca Reinstalar: el mod se hace de nuevo desde la versión publicada.</string>
+    <string name="hf_btn_discard">Descartar</string>
+    <string name="hf_discard_title">¿Descartar la actualización sin terminar?</string>
+    <string name="hf_discard_text">Se borra lo que descargó y preparó hasta ahora. La versión instalada se queda, y la próxima actualización empieza desde el principio.</string>
+    <string name="hf_toast_discard_failed">No se pudieron borrar algunos archivos de la actualización sin terminar.</string>
+    <string name="hf_btn_allow_notifications">Permitir notificaciones</string>
+    <string name="hf_replace_title">Heavenfall se cierra para actualizarse</string>
+    <string name="hf_replace_text">Para instalar su versión nueva, la app se cierra. La actualización sigue sola: su barra queda en las notificaciones, y una notificación te avisa al terminar. Tócala para volver a Heavenfall.</string>
+    <string name="hf_btn_update">Actualizar</string>
+    <string name="hf_note_end_channel">Resultado de las actualizaciones</string>
+    <string name="hf_note_done_text">Toca para jugar.</string>
+    <string name="hf_note_cancelled_text">Toca para abrir Heavenfall: la actualización sigue desde donde se quedó.</string>
 </resources>

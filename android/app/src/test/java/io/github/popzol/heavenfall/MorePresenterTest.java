@@ -17,13 +17,13 @@ import org.junit.Test;
 import io.github.popzol.heavenfall.MorePresenter.Command;
 
 public class MorePresenterTest {
-    private final HomeModel model = new HomeModel(Support.tuning());
+    private final HomeModel model = Support.model();
 
     private HomeModel.Input input() {
         HomeModel.Input in = new HomeModel.Input();
         in.game = Source.GOOD;
         in.update = Source.GOOD;
-        in.installed = new Installed("beta", "0.2.3", "s", sha('a'), false, sha('b'), "t", sha('b'));
+        in.installed = Support.installed("beta", "0.2.3", "s", sha('a'), false, sha('b'), "t", sha('b'));
         in.latestMod = "v0.2.3";
         in.latestApp = "v1.0.0";
         in.appVersion = "1.0.0";
@@ -116,7 +116,7 @@ public class MorePresenterTest {
         assertEquals("hf_xx_state_found", found.state.key);
         assertEquals("hf_xx_advice_update", found.advice.key);
 
-        in.installed = new Installed("beta", "0.2.3", "s", sha('a'), true, sha('b'), "t", sha('b'));
+        in.installed = Support.installed("beta", "0.2.3", "s", sha('a'), true, sha('b'), "t", sha('b'));
         MorePresenter.XxPage used = MorePresenter.xxPage(model.compute(in), in);
         assertEquals("hf_xx_state_in_use", used.state.key);
         assertNull(used.advice);

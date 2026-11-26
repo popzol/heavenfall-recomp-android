@@ -31,7 +31,7 @@ final class Snapshot {
             UpdateCheck.Latest last = UpdateChecker.last();
             if (last != null) UpdateCheck.fill(last, Config.editions(c), in);
             if (UpdateService.running()) in.job = HomeModel.Job.RUNNING;
-            done.onLoaded(new Snapshot(facts, in, new HomeModel(Config.tuning(c)).compute(in)));
+            done.onLoaded(new Snapshot(facts, in, new HomeModel(Config.tuning(c), Config.buildNeeds(c)).compute(in)));
         });
     }
 }

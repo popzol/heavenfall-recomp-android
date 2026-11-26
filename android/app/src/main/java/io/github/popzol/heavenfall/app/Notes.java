@@ -13,6 +13,7 @@ import io.github.popzol.heavenfall.UpdateTexts;
 /** The update job's notifications: the progress one, how it ended, the player's confirmation and the tap to resume. */
 final class Notes {
     private static final String CHANNEL = "heavenfall_update";
+    private static final String END_CHANNEL = "heavenfall_update_end";
     static final int RUNNING = 60;
     static final int ENDED = 61;
     static final int CONFIRM = 62;
@@ -58,26 +59,42 @@ final class Notes {
         if (nm != null) nm.notify(RUNNING, running(c, p));
     }
 
-    /** How the job ended (not shown for a cancel by the player). */
-    static void ended(Context c, JobProgress p) {
+    /** The end's channel: seen in the status bar, with the phone's usual sound (the app may be closed by then). */
+    private static NotificationManager endManager(Context c) {
         NotificationManager nm = manager(c);
+        if (nm != null && nm.getNotificationChannel(END_CHANNEL) == null) {
+            nm.createNotificationChannel(new NotificationChannel(END_CHANNEL, Texts.resolve(c, UpdateTexts.END_CHANNEL),
+                    NotificationManager.IMPORTANCE_DEFAULT));
+        }
+        return nm;
+    }
+
+    /** A tap opens Home (the launcher's own screen, in a task of its own when the app was closed). */
+    private static PendingIntent home(Context c) {
+        Intent open = new Intent(c, HomeActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        return PendingIntent.getActivity(c, 2, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+    }
+
+    /**
+     * How the job ended, always told ({@link UpdateTexts#ended}): up to date (a tap opens Home, where Play is), stopped
+     * with its reason and advice, or cancelled. A tap opens Home. Not for the end of a job whose app is replacing
+     * itself: the new app goes on with it and tells its own end.
+     */
+    static void ended(Context c, JobProgress p) {
+        NotificationManager nm = endManager(c);
         if (nm == null) return;
         nm.cancel(RUNNING);
-        String title;
-        switch (p.phase) {
-            case DONE:
-                title = UpdateTexts.DONE_TITLE;
-                break;
-            case FAILED:
-                title = UpdateTexts.FAILED_TITLE;
-                break;
-            default:
-                return;
-        }
-        Notification.Builder b = builder(c).setContentTitle(Texts.resolve(c, title)).setAutoCancel(true);
-        b.setContentText(p.phase == JobProgress.Phase.FAILED ? Texts.resolve(c, p.failureReason) + " "
-                + Texts.resolve(c, p.failureAdvice) : Texts.resolve(c, p.state));
-        nm.notify(ENDED, b.build());
+        String[] texts = UpdateTexts.ended(p);
+        if (texts == null) return;
+        String text = texts[1] != null ? Texts.resolve(c, texts[1])
+                : Texts.resolve(c, p.failureReason != null ? p.failureReason : p.state) + " "
+                + Texts.resolve(c, p.failureAdvice != null ? p.failureAdvice : new io.github.popzol.heavenfall.Text("hf_advice_resume"));
+        Notification n = new Notification.Builder(c, END_CHANNEL).setSmallIcon(com.mh4u.port.R.mipmap.ic_launcher)
+                .setContentTitle(Texts.resolve(c, texts[0])).setContentText(text)
+                .setStyle(new Notification.BigTextStyle().bigText(text)).setAutoCancel(true)
+                .setContentIntent(home(c)).build();
+        nm.notify(ENDED, n);
     }
 
     /** The player must confirm the app's install: a tap opens the system's own confirmation. */
@@ -99,8 +116,12 @@ final class Notes {
     static void resume(Context c) {
         NotificationManager nm = manager(c);
         if (nm == null) return;
-        nm.notify(RESUME, builder(c).setContentTitle(Texts.resolve(c, UpdateTexts.RESUME_TITLE))
-                .setContentText(Texts.resolve(c, UpdateTexts.RESUME_TEXT)).setAutoCancel(true).build());
+        NotificationManager end = endManager(c);
+        if (end == null) return;
+        end.notify(RESUME, new Notification.Builder(c, END_CHANNEL).setSmallIcon(com.mh4u.port.R.mipmap.ic_launcher)
+                .setContentTitle(Texts.resolve(c, UpdateTexts.RESUME_TITLE))
+                .setContentText(Texts.resolve(c, UpdateTexts.RESUME_TEXT)).setAutoCancel(true)
+                .setContentIntent(home(c)).build());
     }
 
     static void cancelResume(Context c) {

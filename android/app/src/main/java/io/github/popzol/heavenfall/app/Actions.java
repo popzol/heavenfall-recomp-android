@@ -37,7 +37,7 @@ final class Actions {
             return false;
         }
         Editions.Edition edition = Config.editions(a).first();
-        JobPaths paths = Locations.paths(a, found.gameFile, found.updateFile, choice.xx ? found.xxFile : null, facts.folder);
+        JobPaths paths = Locations.paths(a, found.gameFile, found.updateFile, choice.xx ? found.xxFile : null);
         try {
             return UpdateService.start(a, new UpdateRequest(edition.id, paths, facts.appVersion, choice.xx, choice.forceMod,
                     choice.forceBuild, 0));
@@ -46,6 +46,27 @@ final class Actions {
             Toast.makeText(a, Texts.resolve(a, "hf_fail_unexpected"), Toast.LENGTH_LONG).show();
             return false;
         }
+    }
+
+    /**
+     * Before a job that may replace the app: says that the app closes to install its new version and that the update
+     * goes on by itself, its bar and its end in the notifications; {@code go} runs on "Update". Other jobs run at once.
+     */
+    static void beforeReplace(Activity a, boolean replacesApp, Runnable go) {
+        if (!replacesApp) {
+            go.run();
+            return;
+        }
+        HeavenfallScreens.notice(a, Texts.resolve(a, ScreenTexts.REPLACE_TITLE), Texts.resolve(a, ScreenTexts.REPLACE_TEXT),
+                new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.REPLACE_GO), true, go),
+                new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.NOT_NOW), false, null));
+    }
+
+    /** Resume's Discard: asks first (the unfinished update is deleted, the installed game stays); {@code go} on yes. */
+    static void askDiscard(Activity a, Runnable go) {
+        HeavenfallScreens.notice(a, Texts.resolve(a, ScreenTexts.DISCARD_TITLE), Texts.resolve(a, ScreenTexts.DISCARD_TEXT),
+                new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.DISCARD), true, go),
+                new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.CANCEL), false, null));
     }
 
     /** Asks the player to allow installs, with the sentence that says why; the settings open on "Open settings". */
@@ -71,7 +92,7 @@ final class Actions {
         if (!NotificationAsk.shouldAsk(Build.VERSION.SDK_INT, granted, asked)) return;
         a.getSharedPreferences(NOTIFY_PREFS, Context.MODE_PRIVATE).edit().putBoolean(NOTIFY_ASKED, true).apply();
         HeavenfallScreens.notice(a, Texts.resolve(a, ScreenTexts.NOTIFY_TITLE), Texts.resolve(a, ScreenTexts.NOTIFY_TEXT),
-                new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.ALLOW), true,
+                new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.ALLOW_NOTIFICATIONS), true,
                         () -> a.requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, NOTIFY_REQUEST)),
                 new HeavenfallScreens.Choice(Texts.resolve(a, ScreenTexts.NOT_NOW), false, null));
     }

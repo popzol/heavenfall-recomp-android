@@ -71,14 +71,14 @@ public class LauncherModTest {
         // that is not written whole (a stop in the middle leaves a file the app reads as "nothing installed"), and
         // junk read as a record.
         String a = "a".repeat(64), b = "b".repeat(64), c = "c".repeat(64);
-        Installed first = InstalledStore.after(null, "beta", "0.3.0", "set", a, false, b);
+        Installed first = InstalledStore.after(null, "beta", "0.3.0", "set", a, false, b, b);
         assertEquals("", first.libraryId);
-        Installed built = first.withLibrary("tools1");
-        Installed next = InstalledStore.after(built, "beta", "0.3.1", "set2", c, true, b);
+        Installed built = first.withLibrary("tools1", b, Support.LIBRARY_FILE);
+        Installed next = InstalledStore.after(built, "beta", "0.3.1", "set2", c, true, b, b);
         assertEquals("tools1", next.libraryId);
         assertEquals(b, next.libraryCodeSha256);
         assertTrue(next.withXx);
-        assertEquals("", InstalledStore.after(built, "other_edition", "1", "s", a, false, b).libraryId);
+        assertEquals("", InstalledStore.after(built, "other_edition", "1", "s", a, false, b, b).libraryId);
         File file = new File(tmp.getRoot(), "heavenfall/installed.json");
         InstalledStore.write(file, next);
         assertEquals(next.toJson(), InstalledStore.read(file).toJson());
