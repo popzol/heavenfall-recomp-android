@@ -92,7 +92,10 @@ public final class UpdatePlan {
         public final long weightMs;
         /** The step runs after the app was replaced and restarted. */
         public final boolean afterRestart;
-        /** The step may turn out not to be needed (see {@link UpdatePlan#buildStillNeeded}). */
+        /**
+         * The step may turn out not to be needed (see {@link UpdatePlan#buildStillNeeded}) and is not known to run:
+         * it is left out of the bar, the time left and the step count until {@link UpdatePlan#withBuildConfirmed}.
+         */
         public final boolean conditional;
         public final Leftover leftover;
 
@@ -112,6 +115,16 @@ public final class UpdatePlan {
 
         Step afterRestart(boolean after) {
             return new Step(kind, asset, weightMs, after, conditional, leftover);
+        }
+
+        /** The step is now known to run: it counts in the bar, the time left and the step count. */
+        Step confirmed() {
+            return new Step(kind, asset, weightMs, afterRestart, false, leftover);
+        }
+
+        /** Whether the step counts in the bar, the time left and the step count (an undecided one does not). */
+        boolean counts() {
+            return !conditional;
         }
     }
 
@@ -325,6 +338,16 @@ public final class UpdatePlan {
     }
 
     /**
+     * The same plan with the BUILD step known to run (the applied code needs it): it now counts in the time left and
+     * the step count, which grow by it at that moment (the bar never goes back: {@code UpdateRunner}).
+     */
+    public UpdatePlan withBuildConfirmed() {
+        List<Step> list = new ArrayList<>();
+        for (Step s : steps) list.add(s.kind == StepKind.BUILD ? s.confirmed() : s);
+        return new UpdatePlan(status, refusal, list, editionId, appTarget, modTarget, withXx, basePermille);
+    }
+
+    /**
      * After APPLY: whether the library still has to be built. {@code applied} is the record just written,
      * {@code libraryPresent} whether the library file is on disk, {@code onDiskId} the id found beside it and
      * {@code wantedId} the id of the app's tools.
@@ -334,11 +357,26 @@ public final class UpdatePlan {
                 != HomeModel.Library.GOOD;
     }
 
-    /** The sum of the steps' weights. */
+    /**
+     * The sum of the steps' weights. A build that may turn out not to be needed ({@link Step#conditional}) is not in
+     * it: the build is counted only when it will run, known after applying the mod (the code of the new mod is in
+     * the set, and no release file says it before).
+     */
     public long totalMs() {
         long sum = 0;
-        for (Step s : steps) sum += s.weightMs;
+        for (Step s : steps) {
+            if (s.counts()) sum += s.weightMs;
+        }
         return sum;
+    }
+
+    /** The number of steps the player is told ("Step 4 of 5"): the steps known to run ({@link #totalMs}). */
+    public int stepCount() {
+        int n = 0;
+        for (Step s : steps) {
+            if (s.counts()) n++;
+        }
+        return n;
     }
 
     /**
@@ -349,8 +387,11 @@ public final class UpdatePlan {
         if (stepIndex >= steps.size()) return 1000;
         double f = Math.max(0.0, Math.min(1.0, fraction));
         long done = 0;
-        for (int i = 0; i < stepIndex; i++) done += steps.get(i).weightMs;
-        double position = (done + steps.get(stepIndex).weightMs * f) / (double) totalMs();
+        for (int i = 0; i < stepIndex; i++) {
+            if (steps.get(i).counts()) done += steps.get(i).weightMs;
+        }
+        Step running = steps.get(stepIndex);
+        double position = (done + (running.counts() ? running.weightMs * f : 0)) / (double) Math.max(1, totalMs());
         int value = basePermille + (int) Math.floor((1000 - basePermille) * position);
         return Math.min(999, Math.max(basePermille, value));
     }
@@ -367,8 +408,11 @@ public final class UpdatePlan {
     public long remainingMs(int stepIndex, double fraction, long stepMsLeft) {
         if (stepIndex >= steps.size()) return 0;
         double f = Math.max(0.0, Math.min(1.0, fraction));
-        long left = stepMsLeft >= 0 ? stepMsLeft : Math.round(steps.get(stepIndex).weightMs * (1.0 - f));
-        for (int i = stepIndex + 1; i < steps.size(); i++) left += steps.get(i).weightMs;
+        Step running = steps.get(stepIndex);
+        long left = !running.counts() ? 0 : stepMsLeft >= 0 ? stepMsLeft : Math.round(running.weightMs * (1.0 - f));
+        for (int i = stepIndex + 1; i < steps.size(); i++) {
+            if (steps.get(i).counts()) left += steps.get(i).weightMs;
+        }
         return left;
     }
 

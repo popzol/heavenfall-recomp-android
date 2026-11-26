@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 
 import io.github.popzol.heavenfall.AppInstaller;
 import io.github.popzol.heavenfall.Control;
+import io.github.popzol.heavenfall.GameOpen;
 import io.github.popzol.heavenfall.LeaveGate;
 import io.github.popzol.heavenfall.SelfUpdateRules;
 import io.github.popzol.heavenfall.Tuning;
@@ -187,8 +188,8 @@ public final class SelfUpdate implements AppInstaller {
     }
 
     /**
-     * Waits until the player has left the app (it has stayed off the screen for the tuning's quiet time), telling the
-     * job once that it waits. Stops with {@link UpdateFailure#SELF_NOT_LEFT} after the tuning's longest wait: the APK
+     * Waits until the player has left the app (it has stayed off the screen, with no game open, for the tuning's quiet
+     * time: {@link GameOpen}), telling the job once that it waits. Stops with {@link UpdateFailure#SELF_NOT_LEFT} after the tuning's longest wait: the APK
      * stays downloaded and the next Update goes straight back to this wait.
      */
     private void awaitLeaving(Control control, Waiting waiting) throws UpdateException {
@@ -198,7 +199,7 @@ public final class SelfUpdate implements AppInstaller {
         while (true) {
             control.check();
             long now = System.currentTimeMillis();
-            if (gate.left(appOnScreen(), now)) return;
+            if (gate.left(appOnScreen(), GameOpen.isOpen(), now)) return;
             if (!told) {
                 told = true;
                 waiting.waitingToLeave();

@@ -72,6 +72,10 @@ public class GameActivity extends SDLActivity {
             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> Process.killProcess(Process.myPid()), 200);
             return;
         }
+        // BEGIN heavenfall: the game is open from here to onDestroy: the app's own update waits for it to end (GameOpen)
+        io.github.popzol.heavenfall.GameOpen.opened();
+        gameCounted = true;
+        // END heavenfall
         Diag.install(this);  // (1.0.1: the versions seen, a Java crash's stack for Share log)
         getExternalFilesDir(null);  // (makes the folder, so the native side and adb can find it)
         if (!entered) AppHome.ensure(this);  // (a test run started with adb: the app's folder checked, as the entry does)
@@ -91,10 +95,12 @@ public class GameActivity extends SDLActivity {
     }
 
     private boolean watching;
+    private boolean gameCounted;  // (heavenfall) this activity told GameOpen
     private SecondScreen second;
 
     @Override
     protected void onDestroy() {
+        if (gameCounted) io.github.popzol.heavenfall.GameOpen.closed();  // BEGIN/END heavenfall
         if (watching) Diag.unwatch(this);
         if (rateListener != null) ((DisplayManager) getSystemService(DISPLAY_SERVICE)).unregisterDisplayListener(rateListener);
         rateListener = null;

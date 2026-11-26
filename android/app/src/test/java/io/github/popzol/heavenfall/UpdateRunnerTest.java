@@ -237,6 +237,19 @@ public class UpdateRunnerTest {
         }
     }
 
+    /** The step count the player is told, and the longest time left it was shown, over the running progress. */
+    private java.util.Set<Integer> stepCounts() {
+        java.util.Set<Integer> counts = new java.util.TreeSet<>();
+        for (JobProgress p : seen) if (p.phase == JobProgress.Phase.RUNNING && p.stepCount > 0) counts.add(p.stepCount);
+        return counts;
+    }
+
+    private long longestMsLeft() {
+        long most = 0;
+        for (JobProgress p : seen) if (p.phase == JobProgress.Phase.RUNNING) most = Math.max(most, p.msLeft);
+        return most;
+    }
+
     // ---- the cases
 
     /** A first install: the set and the shared file, applying, building; installed.json says what was made. */
@@ -332,6 +345,9 @@ public class UpdateRunnerTest {
         Installed i = Installed.parse(new String(Files.readAllBytes(paths.installedFile.toPath()), StandardCharsets.UTF_8));
         assertEquals("v0.3", i.modVersion);
         assertEquals(LIB_ID, i.libraryId);
+        // the build was never told: not in the step count (it never went from 4 to 3) nor in the time left
+        assertEquals(java.util.Collections.singleton(3), stepCounts());
+        assertTrue("no build in the time left: " + longestMsLeft(), longestMsLeft() < Support.tuning().buildSeconds * 1000L);
     }
 
     /** A new mod with other code builds again, and the record then names the library. */
@@ -346,6 +362,9 @@ public class UpdateRunnerTest {
         Installed i = Installed.parse(new String(Files.readAllBytes(paths.installedFile.toPath()), StandardCharsets.UTF_8));
         assertEquals(Support.sha('d'), i.codeSha256);
         assertEquals("the library is recorded as built from the new code", i.modCodeSha256, i.libraryCodeSha256);
+        assertEquals("the build joins the count when it is known to run", new java.util.TreeSet<>(java.util.Arrays.asList(3, 4)),
+                stepCounts());
+        assertMonotonic(seen);
     }
 
     /** A build that fails after applying leaves the new mod recorded and the library not good: the home offers Build. */
@@ -491,6 +510,9 @@ public class UpdateRunnerTest {
         assertEquals(why(end), JobProgress.Phase.RESTARTING, end.phase);
         assertEquals(java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared",
                 "install " + editions.app().apk), calls);
+        assertEquals("the app, the set, the shared file, applying and the install; no build", java.util.Collections.singleton(5),
+                stepCounts());
+        assertTrue("no build in the time left: " + longestMsLeft(), longestMsLeft() < Support.tuning().buildSeconds * 1000L);
     }
 
     /** A note whose install never happened (the app is still the old one) is forgotten, not resumed. */
