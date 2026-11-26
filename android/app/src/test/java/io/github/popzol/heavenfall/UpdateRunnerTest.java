@@ -171,11 +171,21 @@ public class UpdateRunnerTest {
                 return new Built(LIB_ID, writeLibrary(7));
             }
         };
-        AppInstaller installer = (apk, control, waiting) -> {
-            calls.add("install " + apk.getName());
-            installedApk = apk;
-            installedApkBytes = readQuietly(apk);
-            if (installFails != null) throw installFails;
+        AppInstaller installer = new AppInstaller() {
+            @Override
+            public String libraryId(File apk) {
+                return apkLibraryId;
+            }
+
+            @Override
+            public void install(File apk, Control control, Waiting waiting) throws UpdateException {
+                calls.add("install " + apk.getName());
+                installedApk = apk;
+                installedApkBytes = readQuietly(apk);
+                waiting.waitingToLeave();
+                waiting.installing();
+                if (installFails != null) throw installFails;
+            }
         };
         UpdateRunner.Parts parts = new UpdateRunner.Parts(new ReleaseClient(server.map()), new Downloader(server.map(),
                 d -> Long.MAX_VALUE), installer, applierOverride != null ? applierOverride : applier, builder, editions,
@@ -188,6 +198,7 @@ public class UpdateRunnerTest {
         return end + " requests=" + server.requests;
     }
 
+    private String apkLibraryId = "";
     private ModApplier applierOverride;
     private byte[] installedApkBytes;
 
@@ -360,22 +371,36 @@ public class UpdateRunnerTest {
         assertEquals(java.util.Arrays.asList("404"), end.failureReason.args);
     }
 
-    /** The app's update: the APK is downloaded, the note is written before it installs, and this job ends there. */
+    private List<String> stateKeys() {
+        List<String> keys = new ArrayList<>();
+        for (JobProgress p : seen) if (keys.isEmpty() || !keys.get(keys.size() - 1).equals(p.state.key)) keys.add(p.state.key);
+        return keys;
+    }
+
+    /**
+     * The new app's tools make the library this app's tools make: the mod and the library are done here, in the app
+     * the player is in, and the APK is the very last step (it waits for the player to leave the app); the note is
+     * written before it, and the new app finds nothing to do but to say the update is done.
+     */
     @Test
-    public void anAppUpdateWritesTheNoteAndEndsTheJob() throws Exception {
+    public void theAppsInstallIsLastWhenTheNewAppMakesTheSameLibrary() throws Exception {
+        apkLibraryId = LIB_ID;
         publishApp("v1.1.0");
         publishMod("v0.3", false);
-        writeInstalled("v0.2", false, true);
+        writeInstalled("v0.2", false, false);
         JobProgress end = run(request("1.0.0", false));
         assertEquals(why(end), JobProgress.Phase.RESTARTING, end.phase);
-        assertEquals(java.util.Arrays.asList("install " + editions.app().apk), calls);
+        assertEquals(java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared", "build",
+                "install " + editions.app().apk), calls);
+        assertMonotonic(seen);
         assertArrayEquals(files.get(editions.app().repository + "/v1.1.0/" + editions.app().apk), installedApkBytes);
+        assertTrue("nothing is left for the new app, so the bar says so",
+                stateKeys().contains("hf_state_job_leave_app_last") && !stateKeys().contains("hf_state_job_leave_app_then"));
         Resume note = Resume.tryParse(new String(Files.readAllBytes(paths.resumeFile.toPath()), StandardCharsets.UTF_8));
         assertNotNull(note);
         assertEquals("v1.1.0", note.appTarget);
-        assertEquals("v0.3", note.modTarget);
-        assertTrue("the bar goes on from here", note.basePermille > 0);
-        // the new app starts: the saved request goes on from the note, without the APK step
+        assertTrue("the bar was almost at its end when the install began", note.basePermille > 500);
+        // the new app starts: the saved request goes on from the note; the mod and the library are good already
         assertEquals(HomeModel.Job.HALF_DONE, JobState.left(paths.places, gameFolder, "1.1.0", false));
         UpdateRequest saved = JobState.savedRequest(paths.places, gameFolder);
         assertNotNull(saved);
@@ -383,10 +408,89 @@ public class UpdateRunnerTest {
         calls.clear();
         JobProgress done = runner().run(saved.resumed(note, "1.1.0"), new Control());
         assertEquals(done.toString(), JobProgress.Phase.DONE, done.phase);
-        assertTrue(seen.get(0).permille >= note.basePermille);
-        assertEquals(java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared"), calls);
+        assertEquals("the new app does nothing but tell it is done", new ArrayList<String>(), calls);
         assertFalse(paths.resumeFile.exists());
         assertFalse("the downloaded APK is gone", new File(paths.downloads, editions.app().apk).exists());
+    }
+
+    /** A new app with other tools: the mod is made here, the library is the new app's to build (it plans it again). */
+    @Test
+    public void theLibraryIsTheNewAppsWhenItsToolsAreOther() throws Exception {
+        apkLibraryId = "tools-2";
+        publishApp("v1.1.0");
+        publishMod("v0.3", false);
+        writeInstalled("v0.2", false, true);
+        JobProgress end = run(request("1.0.0", false));
+        assertEquals(why(end), JobProgress.Phase.RESTARTING, end.phase);
+        assertEquals(java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared",
+                "install " + editions.app().apk), calls);
+        assertTrue("the build is still to come, in the new app",
+                stateKeys().contains("hf_state_job_leave_app_then") && !stateKeys().contains("hf_state_job_leave_app_last"));
+        Resume note = Resume.tryParse(new String(Files.readAllBytes(paths.resumeFile.toPath()), StandardCharsets.UTF_8));
+        assertNotNull(note);
+        assertEquals("v0.3", note.modTarget);
+    }
+
+    /** An APK whose library id cannot be read is treated like other tools: the build is left to the new app. */
+    @Test
+    public void anUnreadableLibraryIdLeavesTheBuildToTheNewApp() throws Exception {
+        apkLibraryId = "";
+        publishApp("v1.1.0");
+        writeInstalled("v0.2", false, false);
+        publishMod("v0.2", false);
+        JobProgress end = run(request("1.0.0", false));
+        assertEquals(why(end), JobProgress.Phase.RESTARTING, end.phase);
+        assertEquals(java.util.Arrays.asList("install " + editions.app().apk), calls);
+        assertTrue("it cannot say nothing is left", stateKeys().contains("hf_state_job_leave_app_then"));
+    }
+
+    /**
+     * A set made for the new app: this app cannot apply it, so the install goes first and the mod is the new app's.
+     * The bar does not go back when the order changes.
+     */
+    @Test
+    public void aSetForTheNewAppMakesTheInstallGoFirst() throws Exception {
+        apkLibraryId = LIB_ID;
+        publishApp("v1.1.0");
+        publishMod("v0.3", false);
+        writeInstalled("v0.2", false, true);
+        applierOverride = (p, set, shared, xx, control, progress) -> {
+            calls.add("apply");
+            throw new UpdateException(UpdatePlan.Refusal.NEEDS_NEWER_APP);
+        };
+        JobProgress end = run(request("1.0.0", false));
+        assertEquals(why(end), JobProgress.Phase.RESTARTING, end.phase);
+        assertEquals(java.util.Arrays.asList("apply", "install " + editions.app().apk), calls);
+        assertMonotonic(seen);
+        assertTrue(stateKeys().contains("hf_state_job_leave_app_then"));
+        assertTrue("the note is there for the new app", paths.resumeFile.exists());
+    }
+
+    /** Another failure of the apply is the apply's, with the APK still not installed. */
+    @Test
+    public void aFailedApplyBeforeTheInstallInstallsNothing() throws Exception {
+        apkLibraryId = LIB_ID;
+        publishApp("v1.1.0");
+        publishMod("v0.3", false);
+        writeInstalled("v0.2", false, true);
+        applyFails = new UpdateException(UpdateFailure.APPLY_FAILED, "boom");
+        JobProgress end = run(request("1.0.0", false));
+        assertEquals(JobProgress.Phase.FAILED, end.phase);
+        assertEquals(java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared"), calls);
+        assertFalse(paths.resumeFile.exists());
+    }
+
+    /** A mod with the same code (no build needed) and the install last: the step after the dropped build is the install. */
+    @Test
+    public void aDroppedBuildStillReachesTheInstall() throws Exception {
+        apkLibraryId = LIB_ID;
+        publishApp("v1.1.0");
+        publishMod("v0.3", false);
+        writeInstalled("v0.2", false, true);
+        JobProgress end = run(request("1.0.0", false));
+        assertEquals(why(end), JobProgress.Phase.RESTARTING, end.phase);
+        assertEquals(java.util.Arrays.asList("apply " + beta.setName("usa", false) + " +shared",
+                "install " + editions.app().apk), calls);
     }
 
     /** A note whose install never happened (the app is still the old one) is forgotten, not resumed. */
@@ -400,7 +504,7 @@ public class UpdateRunnerTest {
         assertEquals(JobProgress.Phase.FAILED, end.phase);
         assertEquals("hf_fail_self_aborted", end.failureReason.key);
         assertFalse("a refused install leaves no note", paths.resumeFile.exists());
-        assertTrue("nothing after the APK ran", calls.size() == 1);
+        assertEquals("the mod was made first, nothing ran after the refused APK", 2, calls.size());
         // a note left by an install that did not happen (the process died) is dropped by the home's check
         Files.write(paths.resumeFile.toPath(), new Resume("heavenfall_beta", "v1.1.0", "v0.3", false, 100).toJson().getBytes(StandardCharsets.UTF_8));
         assertEquals(HomeModel.Job.NONE, JobState.left(paths.places, gameFolder, "1.0.0", false));

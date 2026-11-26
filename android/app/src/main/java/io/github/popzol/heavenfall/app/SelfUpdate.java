@@ -1,5 +1,6 @@
 package io.github.popzol.heavenfall.app;
 
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentSender;
@@ -19,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -26,17 +28,25 @@ import java.util.concurrent.TimeUnit;
 
 import io.github.popzol.heavenfall.AppInstaller;
 import io.github.popzol.heavenfall.Control;
+import io.github.popzol.heavenfall.LeaveGate;
 import io.github.popzol.heavenfall.SelfUpdateRules;
+import io.github.popzol.heavenfall.Tuning;
 import io.github.popzol.heavenfall.UpdateException;
 import io.github.popzol.heavenfall.UpdateFailure;
 
 /**
  * Replaces the running app with a downloaded APK. Before anything is installed the APK must be this app (the same
  * package name), have a higher version code and carry the same signing certificates as the installed app (the
- * SHA-256 of each certificate compared: {@link SelfUpdateRules}). The install is a PackageInstaller session. Where
- * Android lets an app update itself without asking (API 31 and later, with the manifest's
- * UPDATE_PACKAGES_WITHOUT_USER_ACTION) it does so; otherwise the system's confirmation is shown (opened at once and
- * kept as a notification) and the job waits for the player's answer.
+ * SHA-256 of each certificate compared: {@link SelfUpdateRules}). The install is a PackageInstaller session.
+ *
+ * <p>The APK is written into the session at once, but the session is committed only when the player has left the app
+ * ({@link LeaveGate} over {@link #appOnScreen}): committing replaces the APK, and Android then stops the app (the
+ * platform's own words: "By default, all installs will result in the package's running processes being killed
+ * before the install completes", SessionParams.setDontKillApp) and an app in the background cannot bring its screen
+ * back (Android 10's background activity starts), which put the player outside the app with the update going on out
+ * of sight. Where Android lets an app update itself without asking (API 31 and later, with the manifest's
+ * UPDATE_PACKAGES_WITHOUT_USER_ACTION) the commit installs; otherwise the system's confirmation is kept as a
+ * notification (the player is away from the app) and the job waits for the player's answer.
  */
 public final class SelfUpdate implements AppInstaller {
     static final String ACTION = "io.github.popzol.heavenfall.INSTALL_RESULT";
@@ -60,9 +70,11 @@ public final class SelfUpdate implements AppInstaller {
     private static final ConcurrentHashMap<Integer, LinkedBlockingQueue<Result>> WAITING = new ConcurrentHashMap<>();
 
     private final Context context;
+    private final Tuning tuning;
 
-    public SelfUpdate(Context context) {
+    public SelfUpdate(Context context, Tuning tuning) {
         this.context = context.getApplicationContext();
+        this.tuning = tuning;
     }
 
     /** Whether the player allowed this app to install apps (a store-less app asks for it once in Android's settings). */
@@ -143,7 +155,10 @@ public final class SelfUpdate implements AppInstaller {
         WAITING.put(id, queue);
         boolean finished = false;
         try {
-            commit(installer, id, apk);
+            write(installer, id, apk);
+            awaitLeaving(control, waiting);
+            waiting.installing();
+            commit(installer, id);
             awaitResult(queue, id, control, waiting);
             finished = true;
         } finally {
@@ -153,7 +168,8 @@ public final class SelfUpdate implements AppInstaller {
         }
     }
 
-    private void commit(PackageInstaller installer, int id, File apk) throws UpdateException {
+    /** The APK goes into the session (nothing is installed until {@link #commit}). */
+    private void write(PackageInstaller installer, int id, File apk) throws UpdateException {
         try (PackageInstaller.Session session = installer.openSession(id)) {
             try (InputStream in = new FileInputStream(apk); OutputStream out = session.openWrite("base.apk", 0, apk.length())) {
                 byte[] buffer = new byte[64 * 1024];
@@ -161,19 +177,75 @@ public final class SelfUpdate implements AppInstaller {
                 while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
                 session.fsync(out);
             }
-            Intent result = new Intent(context, InstallResultReceiver.class).setAction(ACTION);
-            PendingIntent pi = PendingIntent.getBroadcast(context, id, result,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
-            IntentSender sender = pi.getIntentSender();
-            session.commit(sender);
         } catch (IOException e) {
             String text = String.valueOf(e.getMessage());
             throw new UpdateException(text.contains("ENOSPC") ? UpdateFailure.SELF_STORAGE : UpdateFailure.SELF_FAILED,
                     "write", e);
         } catch (RuntimeException e) {
+            throw new UpdateException(UpdateFailure.SELF_FAILED, "write", e);
+        }
+    }
+
+    /**
+     * Waits until the player has left the app (it has stayed off the screen for the tuning's quiet time), telling the
+     * job once that it waits. Stops with {@link UpdateFailure#SELF_NOT_LEFT} after the tuning's longest wait: the APK
+     * stays downloaded and the next Update goes straight back to this wait.
+     */
+    private void awaitLeaving(Control control, Waiting waiting) throws UpdateException {
+        LeaveGate gate = new LeaveGate(tuning.appLeaveQuietSeconds * 1000L);
+        long deadline = System.currentTimeMillis() + tuning.appLeaveWaitMaxSeconds * 1000L;
+        boolean told = false;
+        while (true) {
+            control.check();
+            long now = System.currentTimeMillis();
+            if (gate.left(appOnScreen(), now)) return;
+            if (!told) {
+                told = true;
+                waiting.waitingToLeave();
+            }
+            if (now > deadline) throw new UpdateException(UpdateFailure.SELF_NOT_LEFT, "install");
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new UpdateException(UpdateFailure.INTERRUPTED, "install", e);
+            }
+        }
+    }
+
+    /**
+     * Whether the app is on the screen: one of its processes is the foreground UI (importance FOREGROUND, "running
+     * the foreground UI; that is, it is the thing currently at the top of the screen that the user is interacting
+     * with"). A process that only runs this job's foreground service reports FOREGROUND_SERVICE, a lower rank. An
+     * app's own processes are always listed to it (Android 5.1 and later). When Android does not say, the app is
+     * taken as away: the update must not wait for ever on a phone that cannot tell.
+     */
+    private boolean appOnScreen() {
+        try {
+            ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+            List<ActivityManager.RunningAppProcessInfo> list = am == null ? null : am.getRunningAppProcesses();
+            if (list == null) return false;
+            for (ActivityManager.RunningAppProcessInfo p : list) {
+                if (p.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) return true;
+            }
+            return false;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    private void commit(PackageInstaller installer, int id) throws UpdateException {
+        try (PackageInstaller.Session session = installer.openSession(id)) {
+            Intent result = new Intent(context, InstallResultReceiver.class).setAction(ACTION);
+            PendingIntent pi = PendingIntent.getBroadcast(context, id, result,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+            IntentSender sender = pi.getIntentSender();
+            session.commit(sender);
+        } catch (IOException | RuntimeException e) {
             throw new UpdateException(UpdateFailure.SELF_FAILED, "commit", e);
         }
     }
+
 
     private void awaitResult(LinkedBlockingQueue<Result> queue, int id, Control control, Waiting waiting)
                               throws UpdateException {

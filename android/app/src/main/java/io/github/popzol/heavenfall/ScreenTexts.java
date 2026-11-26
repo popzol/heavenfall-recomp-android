@@ -20,7 +20,7 @@ public final class ScreenTexts {
     public static final Text NOTIFY_TITLE = new Text("hf_notify_title");
     public static final Text NOTIFY_TEXT = new Text("hf_notify_text");
     public static final Text ALLOW_NOTIFICATIONS = new Text("hf_btn_allow_notifications");
-    /** Before a job that may replace the app: it closes, and the update goes on by itself in the notifications. */
+    /** Before a job that may replace the app: the new version is installed only after the player leaves the app. */
     public static final Text REPLACE_TITLE = new Text("hf_replace_title");
     public static final Text REPLACE_TEXT = new Text("hf_replace_text");
     public static final Text REPLACE_GO = new Text("hf_btn_update");

@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -62,7 +63,10 @@ public class UpdatePlanTest {
         return UpdatePlan.make("beta", in, tuning);
     }
 
-    /** The order of one "Update to X": APK, set, shared file, apply, build; everything after the APK runs after restart. */
+    /**
+     * The order a plan starts with: the APK's download, its install, set, shared file, apply, build; before the APK is
+     * downloaded the install is first and everything after it runs in the new app (the runner places it later).
+     */
     @Test
     public void everythingInOrder() {
         UpdatePlan.Input in = base();
@@ -70,12 +74,14 @@ public class UpdatePlanTest {
         in.appAsset = asset(APP_REPO, "v1.1.0", "Heavenfall-android.apk", 150L << 20);
         UpdatePlan p = make(in);
         assertEquals(UpdatePlan.Status.STEPS, p.status);
-        assertEquals(Arrays.asList(StepKind.APP, StepKind.SET, StepKind.SHARED, StepKind.APPLY, StepKind.BUILD), kinds(p));
+        assertEquals(Arrays.asList(StepKind.APP, StepKind.APP_INSTALL, StepKind.SET, StepKind.SHARED, StepKind.APPLY,
+                StepKind.BUILD), kinds(p));
         assertFalse(p.steps().get(0).afterRestart);
-        for (UpdatePlan.Step s : p.steps().subList(1, 5)) assertTrue(s.kind + " runs after the restart", s.afterRestart);
-        assertEquals(1, p.stepsBeforeRestart().size());
+        assertFalse(p.steps().get(1).afterRestart);
+        for (UpdatePlan.Step s : p.steps().subList(2, 6)) assertTrue(s.kind + " runs after the restart", s.afterRestart);
+        assertEquals(2, p.stepsBeforeRestart().size());
         assertEquals(4, p.stepsAfterRestart().size());
-        assertTrue("the build waits to see the applied code", p.steps().get(4).conditional);
+        assertTrue("the build waits to see the applied code", p.steps().get(5).conditional);
         assertEquals("0.3", Version.parse(p.modTarget).toString());
     }
 
@@ -140,6 +146,49 @@ public class UpdatePlanTest {
                 StepKind.APPLY, StepKind.BUILD), kinds(make(withApp(in, "1.1.0"))));
     }
 
+    private UpdatePlan appPlan() {
+        UpdatePlan.Input in = base();
+        in.latestApp = "v1.1.0";
+        in.appAsset = asset(APP_REPO, "v1.1.0", "Heavenfall-android.apk", 150L << 20);
+        return make(in);
+    }
+
+    /**
+     * Where the APK's install goes: LAST keeps the mod and the build in this app, AFTER_MOD leaves the build to the
+     * new app, FIRST leaves everything to it; the steps after the install are flagged and the note is written in
+     * every case, with the bar where the install starts.
+     */
+    @Test
+    public void theInstallGoesWhereItIsPlaced() {
+        UpdatePlan p = appPlan();
+        UpdatePlan last = p.withInstall(UpdatePlan.InstallAt.LAST);
+        assertEquals(Arrays.asList(StepKind.APP, StepKind.SET, StepKind.SHARED, StepKind.APPLY, StepKind.BUILD,
+                StepKind.APP_INSTALL), kinds(last));
+        for (UpdatePlan.Step s : last.steps()) assertFalse(s.kind + " runs here", s.afterRestart);
+        assertFalse("nothing is left for the new app", last.stepsAfterInstall());
+        assertTrue("the build still waits to see the applied code", last.steps().get(4).conditional);
+
+        UpdatePlan mod = p.withInstall(UpdatePlan.InstallAt.AFTER_MOD);
+        assertEquals(Arrays.asList(StepKind.APP, StepKind.SET, StepKind.SHARED, StepKind.APPLY, StepKind.APP_INSTALL),
+                kinds(mod));
+        assertFalse("the new app plans the build again", mod.has(StepKind.BUILD));
+
+        UpdatePlan first = p.withInstall(UpdatePlan.InstallAt.FIRST);
+        assertEquals(kinds(p), kinds(first));
+        assertTrue(first.stepsAfterInstall());
+
+        for (UpdatePlan plan : new UpdatePlan[] {last, mod, first}) {
+            Resume note = plan.resumeNote();
+            assertNotNull("the new app always says how the update ended", note);
+            assertEquals(note.basePermille, plan.permille(plan.indexOf(StepKind.APP_INSTALL), 0.0));
+        }
+        assertTrue("the later the install, the further the bar is when it comes",
+                last.resumeNote().basePermille > mod.resumeNote().basePermille
+                        && mod.resumeNote().basePermille > first.resumeNote().basePermille);
+        UpdatePlan noApp = make(base());
+        assertSame("a plan with no APK has no install to place", noApp, noApp.withInstall(UpdatePlan.InstallAt.LAST));
+    }
+
     private static UpdatePlan.Input withApp(UpdatePlan.Input in, String version) {
         in.appVersion = version;
         return in;
@@ -177,11 +226,12 @@ public class UpdatePlanTest {
         in.latestApp = "v1.1.0";
         in.appAsset = asset(APP_REPO, "v1.1.0", "Heavenfall-android.apk", 1L << 20);
         UpdatePlan p = make(in);
-        assertEquals(UpdatePlan.Leftover.NOTHING, p.steps().get(0).leftover);
-        assertEquals(UpdatePlan.Leftover.PARTIAL_DOWNLOAD, p.steps().get(1).leftover);
+        assertEquals(UpdatePlan.Leftover.PARTIAL_DOWNLOAD, p.steps().get(0).leftover);
+        assertEquals(UpdatePlan.Leftover.NOTHING, p.steps().get(1).leftover);
         assertEquals(UpdatePlan.Leftover.PARTIAL_DOWNLOAD, p.steps().get(2).leftover);
-        assertEquals(UpdatePlan.Leftover.STAGING_DISCARDED, p.steps().get(3).leftover);
-        assertEquals(UpdatePlan.Leftover.BUILD_CACHE, p.steps().get(4).leftover);
+        assertEquals(UpdatePlan.Leftover.PARTIAL_DOWNLOAD, p.steps().get(3).leftover);
+        assertEquals(UpdatePlan.Leftover.STAGING_DISCARDED, p.steps().get(4).leftover);
+        assertEquals(UpdatePlan.Leftover.BUILD_CACHE, p.steps().get(5).leftover);
         for (StepKind k : StepKind.values()) assertTrue(k.labelKey().startsWith("hf_step_"));
     }
 

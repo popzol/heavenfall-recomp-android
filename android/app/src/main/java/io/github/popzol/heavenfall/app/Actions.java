@@ -49,8 +49,9 @@ final class Actions {
     }
 
     /**
-     * Before a job that may replace the app: says that the app closes to install its new version and that the update
-     * goes on by itself, its bar and its end in the notifications; {@code go} runs on "Update". Other jobs run at once.
+     * Before a job that may replace the app: says that its new version is installed only after the player leaves the
+     * app and that what is left goes on by itself, its bar and its end in the notifications; {@code go} runs on
+     * "Update". Other jobs run at once.
      */
     static void beforeReplace(Activity a, boolean replacesApp, Runnable go) {
         if (!replacesApp) {

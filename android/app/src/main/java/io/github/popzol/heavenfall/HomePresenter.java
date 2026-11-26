@@ -69,8 +69,9 @@ public final class HomePresenter {
         /** Resume's Discard entry; null when it is not offered. */
         public final Button discard;
         /**
-         * The big button's job may replace the app (a newer app is out): the screen says first that the app closes to
-         * install its new version and that the update goes on by itself, its end told in a notification.
+         * The big button's job may replace the app (a newer app is out): the screen says first that the new version is
+         * installed only after the player leaves the app, and that what is left goes on by itself, its end told in a
+         * notification.
          */
         public final boolean replacesApp;
         public final Button more;
