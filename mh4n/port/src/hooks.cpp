@@ -3984,7 +3984,7 @@ std::vector<std::string> Install(const RCodeInfo& info) {
     frames = 0;
     dlc_installed = -1, dlc_flags_phase = 0, dlc_flags_backup.clear(), dlc_flags_failed = false, dlc_flags_set = 0;
     supply_flight_seen = 0, supply_taken = 0, supply_taken_ns = 0;
-    owner_regions.clear();
+    owner_regions.Clear();
     quest_start_held = 0;
     target_held = 0;
     skip_offered = false;

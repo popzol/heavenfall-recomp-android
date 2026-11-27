@@ -69,6 +69,9 @@ public:
         return true;
     }
 
+    /// Forgets what was moved (a new start of the game).
+    void Clear() { placed_.clear(); }
+
 private:
     struct Entry {
         uint32_t viewport, camera;

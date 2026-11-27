@@ -119,6 +119,14 @@ void an_owner_with_console_rows_keeps_going_up() {
            out.moved && out.rows.y0 == 216 + 68 && out.rows.y1 == 392 + 68);
 }
 
+void a_new_start_forgets_what_was_moved() {
+    const uint32_t w = 536;
+    Moved moved;
+    const Out first = Place(moved, 1, 0x1000, SUB_VIEW_MODE, w, Opened(w, 8, 184));
+    moved.Clear();
+    report("after Clear the moved rows are a new write again", Place(moved, 1, 0x1000, SUB_VIEW_MODE, w, first.rows).moved);
+}
+
 void a_rectangle_that_is_not_ours_is_left() {
     Moved moved;
     report("rows past the target (a rectangle that is not of the top screen) stay", !Place(moved, 1, 0x1000, SUB_VIEW_MODE, 536, {500, 700}).moved);
@@ -136,6 +144,7 @@ int main() {
     the_console_picture_is_left_alone();
     a_whole_screen_region_widens();
     an_owner_with_console_rows_keeps_going_up();
+    a_new_start_forgets_what_was_moved();
     a_rectangle_that_is_not_ours_is_left();
     return failed;
 }
