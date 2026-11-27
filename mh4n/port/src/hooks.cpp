@@ -10,6 +10,7 @@
 #include "swkbd_bridge.h"
 #include "gather.h"  // (gather everything in one press, 1.0.1)
 #include "hud_face.h"  // (where Heavenfall's HUD draws the target face, and the HUD size it was made with)
+#include "viewport_region.h"  // (where a 3D view framed by the HUD goes in the wide picture)
 
 #include <algorithm>
 #include <atomic>
@@ -1017,19 +1018,15 @@ void DisplayBufferInit(RCtx* ctx, RFunc original) {
     original(ctx);
 }
 
-/// The rows each viewport with a region of its owner's was last given here, so that the region
-/// is moved once and not again on every call.
-struct OwnerRegion {
-    u32 viewport, y0, y1;
-};
-std::vector<OwnerRegion> owner_regions;
+/// The regions its owners set that were moved (viewport_region.h): the same region is not moved again on every call.
+ViewportRegion::Moved owner_regions;
 
 /// sCamera::Viewport::updateRegion(this): top-screen viewports drawn into the scene target.
 /// The regions updateRegion computes from the 400 rows (modes 0 and 2..9, every call) are
 /// scaled to the wider target. A region its owner set (mode 1, >= 10), such as the weapon
 /// preview at the smithy, stays as it is between calls; it frames a 3D view inside a HUD box,
 /// and the HUD is centred in the wider picture, so it moves by half the extra rows, once (a
-/// region over the whole 400 rows is widened instead).
+/// region over the whole 400 rows is widened instead). Which way it moves is viewport_region.h's.
 void UpdateRegion(RCtx* ctx, RFunc original) {
     const u32 viewport = ctx->r[0];
     original(ctx);
@@ -1055,27 +1052,11 @@ void UpdateRegion(RCtx* ctx, RFunc original) {
     if (mode == 0xa) {
         return; // setupDraw puts its own rectangle in (a tunable makes it W rows)
     }
-    const u32 y0 = rd32(ctx, viewport + VIEWPORT_Y0);
-    const u32 y1 = rd32(ctx, viewport + VIEWPORT_Y1);
-    auto it = std::find_if(owner_regions.begin(), owner_regions.end(),
-                           [viewport](const OwnerRegion& r) { return r.viewport == viewport; });
-    if (it != owner_regions.end() && it->y0 == y0 && it->y1 == y1) {
-        return; // moved already
-    }
-    if (y0 > y1 || y1 > TOP_ROWS) {
-        return; // not a region of the native 400 rows
-    }
-    const bool whole = y0 == 0 && y1 == TOP_ROWS;
-    const u32 shift = (rows - TOP_ROWS) / 2;
-    const u32 new_y0 = whole ? 0 : y0 + shift;
-    const u32 new_y1 = whole ? rows : y1 + shift;
-    wr32(ctx, viewport + VIEWPORT_Y0, new_y0);
-    wr32(ctx, viewport + VIEWPORT_Y1, new_y1);
-    if (it == owner_regions.end()) {
-        owner_regions.push_back({viewport, new_y0, new_y1});
-    } else {
-        it->y0 = new_y0;
-        it->y1 = new_y1;
+    ViewportRegion::Rows moved{};
+    if (owner_regions.Place(viewport, rd32(ctx, viewport + VIEWPORT_CAMERA), mode, rows,
+                            {rd32(ctx, viewport + VIEWPORT_Y0), rd32(ctx, viewport + VIEWPORT_Y1)}, moved)) {
+        wr32(ctx, viewport + VIEWPORT_Y0, moved.y0);
+        wr32(ctx, viewport + VIEWPORT_Y1, moved.y1);
     }
 }
 
@@ -4003,7 +3984,7 @@ std::vector<std::string> Install(const RCodeInfo& info) {
     frames = 0;
     dlc_installed = -1, dlc_flags_phase = 0, dlc_flags_backup.clear(), dlc_flags_failed = false, dlc_flags_set = 0;
     supply_flight_seen = 0, supply_taken = 0, supply_taken_ns = 0;
-    owner_regions.clear();
+    owner_regions.Clear();
     quest_start_held = 0;
     target_held = 0;
     skip_offered = false;
