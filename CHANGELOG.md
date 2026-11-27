@@ -4,6 +4,10 @@
 
 ## Heavenfall for Android
 
+### 1.0.1
+
+- On wide phones, the 3D models of the Smithy, Layered Gear and the Felynes sit inside their frames.
+
 ### 1.0.0
 
 - Heavenfall is an app of its own that sets the mod up, keeps it up to date and starts the game.
@@ -754,6 +758,10 @@ came with ads, it isn't the official one. Check the APK's SHA-256 against the re
 ## Español
 
 ## Heavenfall para Android
+
+### 1.0.1
+
+- En móviles de pantalla ancha, los modelos 3D de la Forja, Equipo superpuesto y los Felynes quedan dentro de su marco.
 
 ### 1.0.0
 
